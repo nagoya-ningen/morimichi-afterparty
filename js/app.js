@@ -3,7 +3,7 @@
    data.js / ngwords.js のグローバルと firebase.js を使う。
 ============================================================ */
 import {
-  FIREBASE_READY, authReady, createPost, fetchFeed, fetchByTarget,
+  FIREBASE_READY, createPost, fetchFeed, fetchByTarget,
   reportPost
 } from './firebase.js';
 
@@ -139,7 +139,7 @@ import {
     const b = $('#nightBtn');
     if (b) b.textContent = state.night ? '☀️' : '🌙';
     const tc = document.querySelector('meta[name="theme-color"]');
-    if (tc) tc.setAttribute('content', state.night ? '#15171c' : '#de1815');
+    if (tc) tc.setAttribute('content', state.night ? '#20232f' : '#fffdf9');
   }
 
   /* ---------- ビュー切替 ---------- */
