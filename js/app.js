@@ -1,10 +1,10 @@
 /* ============================================================
    森道 After party — アプリ本体（ESM）
-   data.js / ngwords.js / exif.js のグローバルと firebase.js を使う。
+   data.js / ngwords.js のグローバルと firebase.js を使う。
 ============================================================ */
 import {
   FIREBASE_READY, authReady, createPost, fetchFeed, fetchByTarget,
-  getPhotoURL, reportPost
+  reportPost
 } from './firebase.js';
 
 (function () {
@@ -38,7 +38,6 @@ import {
     form: {
       name: '', day: '', instagram: '', body: '',
       targetType: '', targetId: null, targetName: '',
-      photo: null,          // { blob, width, height, url }
       errors: [], submitting: false, piiOk: false
     },
     search: { kind: 'artist', query: '', result: null, resultTarget: null }
@@ -206,7 +205,6 @@ import {
       more.onclick = () => loadFeed(false);
       root.appendChild(more);
     }
-    hydratePhotos(root);
   }
 
   function postCard(p) {
@@ -215,9 +213,6 @@ import {
     let html = '<span class="post-target">' + tt.icon +
       '<span class="pt-name">' + esc(p.targetName || tt.label) + '</span></span>';
     html += '<div class="post-body">' + esc(p.body) + '</div>';
-    if (p.photoPath) {
-      html += '<div class="post-photo" data-photo="' + esc(p.photoPath) + '"></div>';
-    }
     html += '<div class="post-meta">' +
       '<span class="post-name">' + esc(p.name) + '</span>' +
       '<span class="post-day">' + esc(dayLabel(p.day)) + '</span>';
@@ -236,21 +231,6 @@ import {
     return card;
   }
 
-  /* 写真プレースホルダを順次URL解決して埋める */
-  function hydratePhotos(root) {
-    $$('.post-photo[data-photo]', root || document).forEach(box => {
-      const path = box.getAttribute('data-photo');
-      box.removeAttribute('data-photo');
-      getPhotoURL(path).then(url => {
-        if (!url) return;
-        const img = new Image();
-        img.loading = 'lazy';
-        img.alt = '投稿写真';
-        img.src = url;
-        box.appendChild(img);
-      }).catch(() => {});
-    });
-  }
   async function loadFeed(reset) {
     if (!FIREBASE_READY) return;
     const f = state.feed;
@@ -364,33 +344,6 @@ import {
     bodyField.querySelector('.field__body').appendChild(counter);
     form.appendChild(bodyField);
 
-    /* 写真 */
-    const photoField = fieldWrap('写真', false, '', '');
-    const pbody = photoField.querySelector('.field__body');
-    if (fm.photo) {
-      const pv = el('div', 'photo-preview');
-      const img = new Image();
-      img.src = fm.photo.url;
-      img.alt = '添付写真プレビュー';
-      pv.appendChild(img);
-      const rm = el('button', 'photo-remove', '✕');
-      rm.onclick = () => {
-        if (fm.photo && fm.photo.url) { try { URL.revokeObjectURL(fm.photo.url); } catch (e) {} }
-        fm.photo = null; renderPost();
-      };
-      pv.appendChild(rm);
-      pbody.appendChild(pv);
-      pbody.appendChild(el('div', 'photo-note',
-        '位置情報などの撮影データは自動で削除され、リサイズして投稿されます。'));
-    } else {
-      const drop = el('label', 'photo-drop',
-        '📷 タップして写真を選ぶ（任意）<br>' +
-        '<span style="font-size:11px">位置情報は自動で除去されます</span>' +
-        '<input type="file" accept="image/*" id="fPhoto" style="display:none">');
-      pbody.appendChild(drop);
-    }
-    form.appendChild(photoField);
-
     /* 送信 */
     const submit = el('button', 'btn btn--primary btn--block btn--lg',
       fm.submitting ? '投稿中…' : '感想を投稿する');
@@ -401,7 +354,7 @@ import {
     root.appendChild(form);
 
     /* --- 入力イベントの結線 --- */
-    const nameI = $('#fName'), igI = $('#fIg'), bodyI = $('#fBody'), photoI = $('#fPhoto');
+    const nameI = $('#fName'), igI = $('#fIg'), bodyI = $('#fBody');
     if (nameI) nameI.oninput = () => { fm.name = nameI.value; };
     if (igI) igI.oninput = () => { fm.instagram = igI.value; };
     if (bodyI) {
@@ -414,7 +367,6 @@ import {
       bodyI.oninput = upd;
       upd();
     }
-    if (photoI) photoI.onchange = () => onPhotoPick(photoI);
   }
 
   function fieldWrap(label, required, innerHtml, hint) {
@@ -428,23 +380,6 @@ import {
     f.appendChild(body);
     if (hint) f.appendChild(el('div', 'field__hint', esc(hint)));
     return f;
-  }
-
-  async function onPhotoPick(input) {
-    const file = input.files && input.files[0];
-    if (!file) return;
-    toast('写真を処理しています…');
-    try {
-      const res = await stripExifAndResize(file);
-      const url = URL.createObjectURL(res.blob);
-      if (state.form.photo && state.form.photo.url) {
-        try { URL.revokeObjectURL(state.form.photo.url); } catch (e) {}
-      }
-      state.form.photo = { blob: res.blob, width: res.width, height: res.height, url: url };
-      renderPost();
-    } catch (e) {
-      toast('この写真は使えませんでした。別の写真を選んでください。');
-    }
   }
 
   /* 対象ピッカー（モーダル） */
@@ -567,15 +502,14 @@ import {
         targetId: tt.pick ? fm.targetId : null,
         targetName: fm.targetName || tt.label,
         clientFlags: ng.soft ? ['ng_soft'] : []
-      }, fm.photo);
+      });
 
       save('mma_lastpost', Date.now());
       /* フォームをリセット */
-      if (fm.photo && fm.photo.url) { try { URL.revokeObjectURL(fm.photo.url); } catch (e) {} }
       state.form = {
         name: name, day: '', instagram: '', body: '',
         targetType: '', targetId: null, targetName: '',
-        photo: null, errors: [], submitting: false, piiOk: false
+        errors: [], submitting: false, piiOk: false
       };
       toast('感想を投稿しました。ありがとうございます');
       loadFeed(true);
@@ -702,7 +636,6 @@ import {
         return;
       }
       res.posts.forEach(p => box.appendChild(postCard(p)));
-      hydratePhotos(box);
     } catch (e) {
       const box = $('#tpList');
       if (box) box.innerHTML =
@@ -729,8 +662,7 @@ import {
       '<p class="field__hint">' +
       '・このアプリは位置情報・端末情報・アクセス解析を取得しません。<br>' +
       '・投稿に含まれるのは、あなたが自分で入力した情報（名前・曜日・Instagram・' +
-      '感想・写真）だけです。<br>' +
-      '・写真は投稿前に、位置情報などの撮影データ（Exif）を自動で削除します。<br>' +
+      '感想）だけです。<br>' +
       '・名前はニックネームで構いません。個人が特定できる情報は書かないでください。' +
       '</p>'));
 

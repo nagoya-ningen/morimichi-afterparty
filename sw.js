@@ -2,7 +2,7 @@
    コード（html/css/js）はネットワーク優先＝常に最新を表示。
    アイコン画像はキャッシュ優先。
    Firebase / Google Fonts 等の外部オリジンは素通し（介入しない）。 */
-const CACHE = 'mma-v1';
+const CACHE = 'mma-v2';
 
 /* 起動に最低限必要なファイル。1つでも失敗すると addAll は全体失敗するため
    個別に add し、失敗してもインストールを止めない。 */
@@ -13,7 +13,6 @@ const CORE = [
   './css/style.css',
   './js/data.js',
   './js/ngwords.js',
-  './js/exif.js',
   './js/firebase.js',
   './js/app.js',
   './img/icon-192.png',
@@ -44,7 +43,7 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   const url = e.request.url;
 
-  /* 同一オリジン以外（Firebase / Firestore / Storage / Google Fonts /
+  /* 同一オリジン以外（Firebase / Firestore / Google Fonts /
      reCAPTCHA 等）は一切介入せず素通し。SWがAPI通信を壊さないため。 */
   if (url.indexOf(self.location.origin) !== 0) return;
 
