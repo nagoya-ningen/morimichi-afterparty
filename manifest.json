@@ -1,0 +1,21 @@
+{
+  "id": "/morimichi-afterparty/",
+  "name": "森道 After party — 感想を残す",
+  "short_name": "森道After",
+  "description": "森、道、市場2026の感想・思い出を残して共有する非公式ファンアプリ",
+  "lang": "ja",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#de1815",
+  "theme_color": "#de1815",
+  "categories": ["events", "music", "social"],
+  "icons": [
+    { "src": "img/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "img/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "img/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "img/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

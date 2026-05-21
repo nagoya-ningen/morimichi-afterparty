@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>森道 After party — 感想を残す</title>
+<meta name="description" content="森、道、市場2026の感想・思い出を残して共有する、非公式のファンアプリ。">
+<meta name="theme-color" content="#de1815">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="森道After">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="img/icon-192.png">
+<link rel="icon" type="image/png" href="img/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" media="print" onload="this.media='all'"
+  href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;700;800&family=Montserrat:wght@700;800&display=swap">
+<noscript><link rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;700;800&family=Montserrat:wght@700;800&display=swap"></noscript>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="app-header__top">
+    <div class="app-header__title">
+      森道 <span class="mark en">After party</span>
+      <span class="unofficial-tag">非公式ファンアプリ</span>
+    </div>
+    <div class="app-header__right">
+      <button class="icon-btn" id="nightBtn" aria-label="表示モード切替">🌙</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="view pad" id="view-feed"></section>
+  <section class="view pad" id="view-post"></section>
+  <section class="view pad" id="view-search"></section>
+  <section class="view pad" id="view-about"></section>
+</main>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal" id="modalBody" role="dialog" aria-modal="true" aria-label="詳細"></div>
+</div>
+
+<nav class="tabbar">
+  <button data-view="feed"><span class="ico">🏠</span><span class="lbl">フィード</span></button>
+  <button data-view="post"><span class="ico">✍️</span><span class="lbl">投稿</span></button>
+  <button data-view="search"><span class="ico">🔍</span><span class="lbl">さがす</span></button>
+  <button data-view="about"><span class="ico">ℹ️</span><span class="lbl">について</span></button>
+</nav>
+
+<!-- データ・辞書・画像処理（グローバル定義） -->
+<script src="js/data.js"></script>
+<script src="js/ngwords.js"></script>
+<script src="js/exif.js"></script>
+<!-- Firebase接続とアプリ本体（ESM。data.js等のグローバルを参照） -->
+<script type="module" src="js/firebase.js"></script>
+<script type="module" src="js/app.js"></script>
+
+<script>
+/* Service Worker 登録。
+   - 初回訪問: controllerchange でのリロードはしない。
+   - 2回目以降: 新SWが有効化されたら一度だけリロードして修正を反映。
+   - アプリ復帰時に update() で最新版を取得。 */
+if ('serviceWorker' in navigator) {
+  var hadController = !!navigator.serviceWorker.controller;
+  var refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (!hadController || refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  });
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (reg) {
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) {
+          try { var p = reg.update(); if (p && p.catch) p.catch(function () {}); }
+          catch (e) {}
+        }
+      });
+    }).catch(function () {});
+  });
+}
+</script>
+</body>
+</html>

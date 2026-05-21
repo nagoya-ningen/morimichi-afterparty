@@ -1,0 +1,296 @@
+/* ============================================================
+   森道 After party — スタイル
+   公式準拠カラー：赤#de1815 / 黒#222 / 白 / 黄#ffe000 / 藍#114557
+   フォント：Montserrat + IBM Plex Sans JP
+============================================================ */
+:root{
+  --red:#de1815;
+  --red-d:#ad1707;
+  --ink:#222222;
+  --ink2:#222222;
+  --paper:#fbf7ef;
+  --card:#ffffff;
+  --yellow:#ffe000;
+  --teal:#114557;
+  --teal-l:#588da9;
+  --sub:#6b6b66;
+  --line:#222222;
+  --soft:#e7e1d4;
+  --ok:#1f9d57;
+  --ng:#d22;
+  --tabh:60px;
+  --headh:52px;
+  --hard:3px 3px 0 var(--ink);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;}
+body{
+  font-family:"IBM Plex Sans JP","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+  background:var(--paper);color:var(--ink);line-height:1.65;
+  -webkit-font-smoothing:antialiased;overscroll-behavior-y:none;
+}
+body.night{
+  --paper:#15171c;--card:#22252d;--ink:#f1ede3;--line:#3a3e48;
+  --sub:#9aa0ac;--soft:#2c2f38;--hard:3px 3px 0 #000;
+}
+img{max-width:100%;display:block;}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;}
+a{color:var(--red-d);}
+.en{font-family:"Montserrat",sans-serif;}
+:focus-visible{outline:3px solid var(--teal);outline-offset:2px;border-radius:2px;}
+body.night :focus-visible{outline-color:var(--teal-l);}
+
+/* ---------- ヘッダー ---------- */
+.app-header{
+  position:fixed;top:0;left:0;right:0;z-index:50;
+  background:var(--red);color:#fff;padding:env(safe-area-inset-top) 0 0;
+  border-bottom:3px solid var(--ink);
+}
+.app-header__top{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:9px 14px;
+}
+.app-header__title{font-weight:800;font-size:17px;letter-spacing:.02em;
+  display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+.app-header__title .mark{
+  background:var(--yellow);color:var(--ink2);font-size:10px;font-weight:800;
+  padding:2px 6px;border-radius:3px;border:2px solid var(--ink2);
+  font-family:"Montserrat",sans-serif;
+}
+.app-header__title .unofficial-tag{
+  background:rgba(255,255,255,.22);color:#fff;font-size:9px;font-weight:800;
+  padding:2px 6px;border-radius:3px;letter-spacing:0;white-space:nowrap;
+}
+.app-header__right{display:flex;align-items:center;gap:8px;}
+.icon-btn{
+  width:36px;height:36px;border-radius:50%;background:#fff;border:2px solid var(--ink2);
+  display:flex;align-items:center;justify-content:center;font-size:15px;flex:none;
+}
+
+/* ---------- メイン ---------- */
+main{
+  padding:calc(var(--headh) + env(safe-area-inset-top)) 0
+          calc(var(--tabh) + env(safe-area-inset-bottom) + 14px);
+  min-height:100%;
+}
+.view{display:none;}
+.view.active{display:block;animation:fade .2s ease;}
+@keyframes fade{from{opacity:0;}to{opacity:1;}}
+.pad{padding:14px 14px;}
+.section-title{
+  font-size:13px;font-weight:800;margin:18px 0 9px;
+  display:flex;align-items:center;gap:7px;
+}
+.section-title:first-child{margin-top:4px;}
+.section-title::before{content:"";width:14px;height:14px;background:var(--red);
+  border:2px solid var(--ink);border-radius:3px;flex:none;}
+.section-title .en{font-size:10px;color:var(--sub);font-weight:700;}
+
+/* ---------- カード ---------- */
+.card{
+  background:var(--card);border:2.5px solid var(--ink);border-radius:12px;
+  box-shadow:var(--hard);padding:14px;margin-bottom:12px;
+}
+.lead{font-size:13px;color:var(--sub);margin-bottom:6px;}
+
+/* ---------- ボタン ---------- */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  font-weight:800;font-size:14px;padding:11px 16px;border-radius:10px;
+  border:2.5px solid var(--ink);background:var(--card);color:var(--ink);
+  box-shadow:var(--hard);transition:.1s;
+}
+.btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--ink);}
+.btn--primary{background:var(--red);color:#fff;}
+.btn--ghost{box-shadow:none;background:transparent;}
+.btn--block{width:100%;}
+.btn--lg{font-size:15px;padding:14px 16px;}
+.btn:disabled{opacity:.5;pointer-events:none;}
+
+/* ---------- 注意書き ---------- */
+.disclaimer{
+  font-size:11.5px;color:var(--sub);background:var(--soft);
+  border:2px dashed var(--line);border-radius:9px;padding:9px 11px;margin-bottom:12px;
+}
+.disclaimer b{color:var(--red-d);}
+
+/* ---------- 検索バー ---------- */
+.searchbar{
+  position:sticky;top:calc(var(--headh) + env(safe-area-inset-top));
+  z-index:10;background:var(--paper);padding:8px 0 10px;
+}
+.searchbar input{
+  width:100%;font-size:16px;padding:11px 13px;border-radius:10px;
+  border:2.5px solid var(--ink);background:var(--card);color:var(--ink);
+}
+
+/* ---------- チップ ---------- */
+.chips{display:flex;gap:7px;flex-wrap:wrap;}
+.chip{
+  font-size:12px;font-weight:700;padding:6px 11px;border-radius:20px;
+  border:2px solid var(--ink);background:var(--card);color:var(--ink);
+}
+.chip.active{background:var(--yellow);color:var(--ink2);}
+
+/* ---------- フォーム ---------- */
+.field{margin-bottom:16px;}
+.field__label{font-size:13px;font-weight:800;margin-bottom:6px;display:flex;
+  align-items:center;gap:6px;}
+.field__req{font-size:10px;font-weight:800;color:#fff;background:var(--red);
+  padding:1px 6px;border-radius:3px;}
+.field__opt{font-size:10px;font-weight:800;color:var(--sub);background:var(--soft);
+  padding:1px 6px;border-radius:3px;}
+.field__hint{font-size:11px;color:var(--sub);margin-top:5px;}
+.input,.textarea{
+  width:100%;font-size:16px;font-family:inherit;padding:11px 13px;border-radius:10px;
+  border:2.5px solid var(--ink);background:var(--card);color:var(--ink);
+}
+.textarea{min-height:130px;resize:vertical;line-height:1.7;}
+.counter{font-size:11px;color:var(--sub);margin-top:5px;text-align:right;}
+.counter.short{color:var(--ng);font-weight:700;}
+.counter.ok{color:var(--ok);font-weight:700;}
+
+/* 曜日ラジオ */
+.day-pick{display:flex;gap:7px;}
+.day-pick label{
+  flex:1;text-align:center;border:2.5px solid var(--ink);border-radius:9px;
+  padding:8px 4px;background:var(--card);transition:.1s;cursor:pointer;
+}
+.day-pick label b{display:block;font-family:"Montserrat",sans-serif;font-size:15px;}
+.day-pick label span{font-size:10px;color:var(--sub);letter-spacing:.1em;}
+.day-pick input{position:absolute;opacity:0;pointer-events:none;}
+.day-pick input:checked + .day-in{}
+.day-pick label.sel{background:var(--yellow);color:var(--ink2);
+  box-shadow:3px 3px 0 var(--ink);transform:translate(-1px,-1px);}
+.day-pick label.sel span{color:var(--ink2);}
+
+/* 対象タイプ選択タイル */
+.target-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.target-tile{
+  border:2.5px solid var(--ink);border-radius:10px;padding:10px 4px;
+  text-align:center;background:var(--card);transition:.1s;
+}
+.target-tile .ti{font-size:22px;display:block;line-height:1.2;}
+.target-tile .tl{font-size:11px;font-weight:700;margin-top:2px;}
+.target-tile.sel{background:var(--teal);color:#fff;
+  box-shadow:3px 3px 0 var(--ink);transform:translate(-1px,-1px);}
+
+/* 対象の具体選択（選んだ結果の表示） */
+.target-chosen{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  border:2.5px solid var(--ink);border-radius:10px;padding:10px 12px;
+  background:var(--card);
+}
+.target-chosen .tc-name{font-weight:700;font-size:14px;}
+.target-chosen .tc-empty{color:var(--sub);font-size:13px;}
+
+/* 写真添付 */
+.photo-drop{
+  border:2.5px dashed var(--line);border-radius:10px;padding:18px;
+  text-align:center;color:var(--sub);font-size:13px;background:var(--card);
+}
+.photo-preview{position:relative;margin-top:8px;}
+.photo-preview img{
+  width:100%;border:2.5px solid var(--ink);border-radius:10px;
+}
+.photo-remove{
+  position:absolute;top:8px;right:8px;width:32px;height:32px;border-radius:50%;
+  background:#fff;border:2px solid var(--ink2);font-size:15px;color:var(--ink2);
+}
+.photo-note{font-size:11px;color:var(--sub);margin-top:5px;}
+
+/* エラー表示 */
+.errbox{
+  background:#fdecec;border:2px solid var(--ng);border-radius:9px;
+  padding:9px 11px;margin-bottom:12px;font-size:12.5px;color:#a11;
+}
+body.night .errbox{background:#3a1f1f;color:#f3a;}
+.errbox ul{margin:0;padding-left:18px;}
+
+/* ---------- フィード投稿カード ---------- */
+.post-card{
+  background:var(--card);border:2.5px solid var(--ink);border-radius:12px;
+  box-shadow:var(--hard);padding:13px;margin-bottom:12px;
+}
+.post-target{
+  display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;
+  background:var(--teal);color:#fff;padding:3px 9px;border-radius:20px;
+  margin-bottom:8px;max-width:100%;
+}
+.post-target .pt-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.post-body{font-size:14px;white-space:pre-wrap;word-break:break-word;}
+.post-photo{margin-top:9px;}
+.post-photo img{width:100%;border:2px solid var(--ink);border-radius:9px;}
+.post-meta{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  margin-top:10px;font-size:11.5px;color:var(--sub);
+}
+.post-name{font-weight:800;color:var(--ink);}
+.post-day{background:var(--yellow);color:var(--ink2);font-weight:800;
+  padding:1px 7px;border-radius:3px;font-size:10px;}
+.post-ig{color:var(--red-d);font-weight:700;text-decoration:none;}
+.post-time{margin-left:auto;}
+.post-report{
+  font-size:11px;color:var(--sub);border:1.5px solid var(--line);
+  border-radius:6px;padding:3px 8px;background:transparent;
+}
+
+/* 空・読込状態 */
+.empty,.loading{
+  text-align:center;color:var(--sub);font-size:13px;padding:40px 16px;
+}
+.more-btn{margin:4px auto 16px;display:block;}
+
+/* ---------- 検索結果リスト ---------- */
+.result-list{display:flex;flex-direction:column;gap:8px;}
+.result-row{
+  display:flex;align-items:center;gap:10px;
+  border:2px solid var(--ink);border-radius:10px;padding:10px 12px;
+  background:var(--card);text-align:left;width:100%;
+}
+.result-row .rr-ico{font-size:18px;flex:none;}
+.result-row .rr-main{flex:1;min-width:0;}
+.result-row .rr-name{font-weight:700;font-size:13.5px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.result-row .rr-sub{font-size:11px;color:var(--sub);}
+.result-row .rr-count{font-size:11px;font-weight:800;color:var(--teal);flex:none;}
+
+/* ---------- モーダル ---------- */
+.modal-bg{
+  position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.5);
+  display:none;align-items:flex-end;justify-content:center;
+}
+.modal-bg.open{display:flex;animation:fade .15s ease;}
+.modal{
+  background:var(--card);width:100%;max-width:560px;
+  border-radius:16px 16px 0 0;border-top:3px solid var(--ink);
+  padding:18px 16px calc(20px + env(safe-area-inset-bottom));
+  max-height:86vh;overflow-y:auto;animation:slideup .2s ease;
+}
+@keyframes slideup{from{transform:translateY(40px);}to{transform:translateY(0);}}
+.modal__handle{width:44px;height:5px;border-radius:3px;background:var(--line);
+  margin:-6px auto 12px;}
+.modal__title{font-size:16px;font-weight:800;margin-bottom:10px;}
+
+/* ---------- タブバー ---------- */
+.tabbar{
+  position:fixed;left:0;right:0;bottom:0;z-index:50;
+  display:flex;background:var(--card);border-top:3px solid var(--ink);
+  padding-bottom:env(safe-area-inset-bottom);height:calc(var(--tabh) + env(safe-area-inset-bottom));
+}
+.tabbar button{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:2px;color:var(--sub);font-size:10px;font-weight:700;position:relative;
+}
+.tabbar button .ico{font-size:19px;line-height:1;}
+.tabbar button.active{color:var(--red);}
+.tabbar button.active .lbl{font-weight:800;}
+
+/* ---------- トースト ---------- */
+.toast{
+  position:fixed;left:50%;bottom:calc(var(--tabh) + 20px);transform:translateX(-50%);
+  background:var(--ink);color:var(--paper);font-size:13px;font-weight:700;
+  padding:10px 18px;border-radius:24px;z-index:200;opacity:0;pointer-events:none;
+  transition:opacity .2s;max-width:90vw;text-align:center;
+}
+.toast.show{opacity:1;}

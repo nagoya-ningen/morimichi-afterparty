@@ -1,0 +1,52 @@
+rules_version = '2';
+
+/* 森道 After party — Firestore セキュリティルール
+   方針：
+   ・公開フィードなので read は「hidden が false の投稿」を全許可。
+   ・create はフィールドを検証。投稿者UIDの偽装を防ぐ。
+   ・update / delete はクライアントから一切不可（荒らし・改ざん防止）。
+     投稿の非表示・削除は運営がコンソールから行う。
+   ・厳密な文字数（本文30字以上）はクライアント側で検証。ここでは
+     極端な値だけを弾くバックストップに徹する（誤ブロック回避）。
+   ・App Check を有効にすると、これに加えてBotが弾かれる。 */
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /posts/{postId} {
+      allow read: if resource.data.hidden == false;
+
+      allow create: if request.auth != null
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.body is string
+        && request.resource.data.body.size() >= 10
+        && request.resource.data.body.size() <= 8000
+        && request.resource.data.day in ['d1', 'd2', 'd3']
+        && request.resource.data.targetType in
+             ['shop', 'shop_brand', 'area', 'artist', 'festival', 'staff']
+        && request.resource.data.targetName is string
+        && request.resource.data.hidden == false
+        && request.resource.data.reportCount == 0;
+
+      /* 投稿の編集・削除はクライアントからは禁止。
+         不適切投稿の非表示（hidden=true）・削除は運営がコンソールで行う。 */
+      allow update, delete: if false;
+    }
+
+    match /reports/{reportId} {
+      /* 通報は作成のみ。読み取り・改変はクライアント不可。 */
+      allow create: if request.auth != null
+        && request.resource.data.reporterUid == request.auth.uid
+        && request.resource.data.postId is string;
+      allow read, update, delete: if false;
+    }
+
+    /* 上記以外のパスはすべて拒否 */
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
