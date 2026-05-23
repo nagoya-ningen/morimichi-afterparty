@@ -1,47 +1,91 @@
 rules_version = '2';
 
-/* 森道 After party — Firestore セキュリティルール
+/* 森道 After party — Firestore セキュリティルール（画像投稿・事前承認制 対応）
+
    方針：
-   ・公開フィードなので read は「hidden が false の投稿」を全許可。
-   ・create はフィールドを検証。投稿者UIDの偽装を防ぐ。
-   ・update / delete はクライアントから一切不可（荒らし・改ざん防止）。
-     投稿の非表示・削除は運営がコンソールから行う。
-   ・厳密な文字数（本文30字以上）はクライアント側で検証。ここでは
-     極端な値だけを弾くバックストップに徹する（誤ブロック回避）。
-   ・App Check を有効にすると、これに加えてBotが弾かれる。 */
+   ・posts の read は「hidden=false かつ status=published」を公開する。
+     承認待ち(pending)は運営と投稿者本人のみ閲覧可。運営は全件閲覧可。
+   ・create はフィールドを検証する。画像つき投稿は status='pending' に強制し、
+     撮影者同意フラグ(imageConsent)を必須にする。
+     テキストのみ投稿は status='published'（従来どおり即時公開）。
+   ・投稿の承認(status)・非表示(hidden)・削除は運営のみ。
+   ・運営判定は request.auth.token.email == 管理者メール。
+     管理者は admin.html からメール＋パスワードでログインする。
+   ・App Check を有効にすると、これに加えてBotの書き込みが弾かれる。
+
+   ▼ セットアップ：adminEmail() を運営者の管理用メールアドレスに置き換える。 */
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    /* ▼ ここを運営者の管理用メールアドレスに置き換える（admin.html のログインに使うもの） */
+    function adminEmail() { return 'fff.yusei@gmail.com'; }
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email == adminEmail();
+    }
+
     match /posts/{postId} {
-      allow read: if resource.data.hidden == false;
+      /* 公開: published のみ。pending は運営・投稿者本人のみ。運営は全件可。 */
+      allow read: if isAdmin()
+        || (
+          resource.data.hidden == false
+          && (
+            resource.data.status == 'published'
+            || (request.auth != null
+                && resource.data.authorUid == request.auth.uid)
+          )
+        );
 
       allow create: if request.auth != null
         && request.resource.data.authorUid == request.auth.uid
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 1
-        && request.resource.data.name.size() <= 80
+        && request.resource.data.name.size() <= 200
         && request.resource.data.body is string
         && request.resource.data.body.size() >= 10
-        && request.resource.data.body.size() <= 8000
+        && request.resource.data.body.size() <= 20000
         && request.resource.data.day in ['d1', 'd2', 'd3']
         && request.resource.data.targetType in
              ['shop', 'shop_brand', 'area', 'artist', 'festival', 'staff']
         && request.resource.data.targetName is string
+        && (request.resource.data.snsUrl == null
+            || (request.resource.data.snsUrl is string
+                && request.resource.data.snsUrl.size() <= 300))
         && request.resource.data.hidden == false
-        && request.resource.data.reportCount == 0;
+        && request.resource.data.reportCount == 0
+        && request.resource.data.status in ['published', 'pending']
+        && (
+          /* テキストのみ：画像なし → 即時公開 */
+          (
+            request.resource.data.imageUrl == null
+            && request.resource.data.status == 'published'
+          )
+          ||
+          /* 画像つき：承認待ち＋撮影者同意フラグ必須 */
+          (
+            request.resource.data.imageUrl is string
+            && request.resource.data.imageUrl.size() <= 600
+            && request.resource.data.status == 'pending'
+            && request.resource.data.imageConsent == true
+          )
+        );
 
-      /* 投稿の編集・削除はクライアントからは禁止。
-         不適切投稿の非表示（hidden=true）・削除は運営がコンソールで行う。 */
-      allow update, delete: if false;
+      /* 承認(status)・非表示(hidden)のみ運営が変更可。他フィールドは変更不可。 */
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data)
+             .affectedKeys().hasOnly(['hidden', 'status']);
+
+      allow delete: if isAdmin();
     }
 
     match /reports/{reportId} {
-      /* 通報は作成のみ。読み取り・改変はクライアント不可。 */
+      /* 通報は作成のみ。閲覧は運営のみ。 */
       allow create: if request.auth != null
         && request.resource.data.reporterUid == request.auth.uid
         && request.resource.data.postId is string;
-      allow read, update, delete: if false;
+      allow read: if isAdmin();
+      allow update, delete: if false;
     }
 
     /* 上記以外のパスはすべて拒否 */

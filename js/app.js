@@ -4,8 +4,12 @@
 ============================================================ */
 import {
   FIREBASE_READY, createPost, fetchFeed, fetchByTarget,
-  reportPost
+  countByTarget, reportPost
 } from './firebase.js';
+import {
+  IMAGE_READY, ACCEPTED_TYPES, MAX_SOURCE_BYTES,
+  compressImage, uploadImage
+} from './image.js';
 
 (function () {
   'use strict';
@@ -30,14 +34,19 @@ import {
   const BODY_MIN = 30, BODY_MAX = 5000, NAME_MAX = 40;
   const COOLDOWN_MS = 30 * 1000;
 
+  /* 削除依頼の窓口フォームURL（手動で設定する。READMEを参照） */
+  const TAKEDOWN_FORM_URL = 'REPLACE_WITH_TAKEDOWN_FORM_URL';
+
   /* ---------- 状態 ---------- */
   const state = {
     view: 'feed',
     night: initNight(),
     feed: { posts: [], lastDoc: null, hasMore: false, loading: false, loaded: false, error: '' },
     form: {
-      name: '', day: '', instagram: '', body: '',
+      name: '', day: '', snsUrl: '', body: '',
       targetType: '', targetId: null, targetName: '',
+      image: null, imageName: '', imagePreviewUrl: '',
+      imageConsent: false, imageBusy: false, imageError: '',
       errors: [], submitting: false, piiOk: false
     },
     search: { kind: 'artist', query: '', result: null, resultTarget: null }
@@ -122,15 +131,37 @@ import {
     if (dd < 7) return dd + '日前';
     return (d.getMonth() + 1) + '月' + d.getDate() + '日';
   }
-  /* Instagram入力をURL/＠付き/素handleのいずれからも @handle へ正規化 */
-  function normInstagram(raw) {
+  /* SNSのURLを正規化。任意のhttp(s) URLを受け付け、妥当なら返す（不正ならnull） */
+  function normSnsUrl(raw) {
     if (!raw) return null;
-    let s = String(raw).trim();
-    const m = s.match(/instagram\.com\/([A-Za-z0-9._]+)/i);
-    if (m) s = m[1];
-    s = s.replace(/^@/, '').replace(/[\/?].*$/, '');
-    if (!/^[A-Za-z0-9._]{1,30}$/.test(s)) return null;
-    return '@' + s;
+    const s = String(raw).trim();
+    if (!s) return null;
+    if (s.length > 300) return null;
+    if (!/^https?:\/\//i.test(s)) return null;
+    try {
+      const u = new URL(s);
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+      return s;
+    } catch (e) { return null; }
+  }
+  /* SNS URLのホスト名から表示用の {icon,label} を返す */
+  function snsMeta(url) {
+    let host = '';
+    try { host = new URL(url).hostname.toLowerCase().replace(/^www\./, ''); }
+    catch (e) { return { icon: '🔗', label: 'リンク' }; }
+    if (host === 'x.com' || host === 'twitter.com' || host === 'mobile.twitter.com')
+      return { icon: '𝕏', label: 'X' };
+    if (host === 'instagram.com') return { icon: '📷', label: 'Instagram' };
+    if (host === 'tiktok.com' || host === 'vt.tiktok.com')
+      return { icon: '🎵', label: 'TikTok' };
+    if (host === 'threads.net' || host === 'threads.com')
+      return { icon: '@', label: 'Threads' };
+    if (host === 'youtube.com' || host === 'youtu.be' || host === 'm.youtube.com')
+      return { icon: '▶', label: 'YouTube' };
+    if (host === 'facebook.com' || host === 'fb.com')
+      return { icon: 'f', label: 'Facebook' };
+    if (host === 'note.com') return { icon: '📝', label: 'note' };
+    return { icon: '🔗', label: 'リンク' };
   }
 
   /* ---------- ナイトモード ---------- */
@@ -213,17 +244,31 @@ import {
     let html = '<span class="post-target">' + tt.icon +
       '<span class="pt-name">' + esc(p.targetName || tt.label) + '</span></span>';
     html += '<div class="post-body">' + esc(p.body) + '</div>';
-    html += '<div class="post-meta">' +
+    card.innerHTML = html;
+
+    /* 画像（あれば本文の下にサムネイル。クリックでライトボックス） */
+    if (p.imageUrl) {
+      const thumb = el('button', 'post-image-wrap');
+      thumb.innerHTML = '<img class="post-image" src="' + esc(p.imageUrl) +
+        '" alt="投稿された写真" loading="lazy">';
+      thumb.onclick = () => openLightbox(p.imageUrl);
+      card.appendChild(thumb);
+    }
+
+    let meta = '<div class="post-meta">' +
       '<span class="post-name">' + esc(p.name) + '</span>' +
       '<span class="post-day">' + esc(dayLabel(p.day)) + '</span>';
-    if (p.instagram) {
-      const h = String(p.instagram).replace(/^@/, '');
-      html += '<a class="post-ig" href="https://instagram.com/' + encodeURIComponent(h) +
-        '" target="_blank" rel="noopener">' + esc(p.instagram) + '</a>';
+    if (p.snsUrl) {
+      const sm = snsMeta(p.snsUrl);
+      meta += '<a class="post-sns" href="' + esc(p.snsUrl) +
+        '" target="_blank" rel="noopener">' +
+        '<span class="post-sns__ico">' + esc(sm.icon) + '</span>' +
+        esc(sm.label) + '</a>';
     }
-    html += '<span class="post-time">' + esc(timeAgo(p.createdAt)) + '</span>';
-    html += '</div>';
-    card.innerHTML = html;
+    meta += '<span class="post-time">' + esc(timeAgo(p.createdAt)) + '</span>';
+    meta += '</div>';
+    card.appendChild(el('div', '', meta).firstChild);
+
     const rep = el('button', 'post-report', '⚐ 通報');
     rep.style.marginTop = '8px';
     rep.onclick = () => openReport(p.id);
@@ -297,11 +342,11 @@ import {
     dayField.querySelector('.field__body').appendChild(dayBox);
     form.appendChild(dayField);
 
-    /* Instagram */
-    form.appendChild(fieldWrap('Instagram', false,
-      '<input class="input" id="fIg" placeholder="@account または URL（任意）" value="' +
-      esc(fm.instagram) + '">',
-      '入力するとフィードに表示され、リンクされます。不要なら空欄のままで。'));
+    /* SNSのURL */
+    form.appendChild(fieldWrap('SNSのURL', false,
+      '<input class="input" id="fSns" placeholder="https://… X・Instagram・TikTokなど（任意）" value="' +
+      esc(fm.snsUrl) + '">',
+      '投稿するとフィードにSNSリンクとして表示されます。不要なら空欄で。'));
 
     /* 対象タイプ */
     const tgrid = el('div', 'target-grid');
@@ -344,6 +389,63 @@ import {
     bodyField.querySelector('.field__body').appendChild(counter);
     form.appendChild(bodyField);
 
+    /* 写真（IMAGE_READY のときだけ） */
+    if (IMAGE_READY) {
+      const imgField = fieldWrap('写真', false, '',
+        '写真は1枚まで。アップロード前に自動で圧縮し、位置情報（EXIF）を' +
+        '削除します。画像つきの投稿は、運営の確認後に公開されます。');
+      const imgBody = imgField.querySelector('.field__body');
+      const imgBox = el('div', 'image-field');
+
+      if (fm.imageError) {
+        imgBox.appendChild(el('div', 'image-error', esc(fm.imageError)));
+      }
+
+      if (fm.image && fm.imagePreviewUrl) {
+        const prev = el('div', 'image-preview');
+        prev.innerHTML =
+          '<img class="image-preview__thumb" src="' + esc(fm.imagePreviewUrl) +
+          '" alt="選択した写真のプレビュー">';
+        const rm = el('button', 'btn btn--ghost image-remove', '削除');
+        rm.onclick = () => {
+          clearFormImage();
+          renderPost();
+        };
+        prev.appendChild(rm);
+        imgBox.appendChild(prev);
+      } else if (fm.imageBusy) {
+        imgBox.appendChild(el('div', 'image-busy', '画像を処理しています…'));
+      } else {
+        const pick = el('label', 'image-pick',
+          '<span class="image-pick__ico">＋</span>' +
+          '<span class="image-pick__txt">写真を選ぶ</span>');
+        pick.appendChild(el('input', 'image-input', ''));
+        const fileI = pick.querySelector('.image-input');
+        fileI.type = 'file';
+        fileI.accept = 'image/*';
+        fileI.onchange = () => handleImagePick(fileI.files && fileI.files[0]);
+        imgBox.appendChild(pick);
+      }
+      imgBody.appendChild(imgBox);
+
+      /* 画像が選択されているときだけ、必須の同意チェック */
+      if (fm.image) {
+        const consent = el('label', 'image-consent');
+        const cb = el('input', 'image-consent__cb', '');
+        cb.type = 'checkbox';
+        cb.checked = !!fm.imageConsent;
+        cb.onchange = () => { fm.imageConsent = cb.checked; };
+        consent.appendChild(cb);
+        consent.appendChild(el('span', 'image-consent__txt',
+          'この写真は自分で撮影したものです。公式画像・他人の作品・他人の' +
+          'SNS投稿の転載ではありません。人物が写っている場合は、本人の同意を' +
+          '得ています（または個人を特定できません）。'));
+        imgField.appendChild(consent);
+      }
+
+      form.appendChild(imgField);
+    }
+
     /* 送信 */
     const submit = el('button', 'btn btn--primary btn--block btn--lg',
       fm.submitting ? '投稿中…' : '感想を投稿する');
@@ -354,9 +456,9 @@ import {
     root.appendChild(form);
 
     /* --- 入力イベントの結線 --- */
-    const nameI = $('#fName'), igI = $('#fIg'), bodyI = $('#fBody');
+    const nameI = $('#fName'), snsI = $('#fSns'), bodyI = $('#fBody');
     if (nameI) nameI.oninput = () => { fm.name = nameI.value; };
-    if (igI) igI.oninput = () => { fm.instagram = igI.value; };
+    if (snsI) snsI.oninput = () => { fm.snsUrl = snsI.value; };
     if (bodyI) {
       const upd = () => {
         fm.body = bodyI.value;
@@ -380,6 +482,53 @@ import {
     f.appendChild(body);
     if (hint) f.appendChild(el('div', 'field__hint', esc(hint)));
     return f;
+  }
+
+  /* 画像系stateのクリア（プレビューURLは解放する） */
+  function clearFormImage() {
+    const fm = state.form;
+    if (fm.imagePreviewUrl) {
+      try { URL.revokeObjectURL(fm.imagePreviewUrl); } catch (e) {}
+    }
+    fm.image = null;
+    fm.imageName = '';
+    fm.imagePreviewUrl = '';
+    fm.imageConsent = false;
+    fm.imageBusy = false;
+    fm.imageError = '';
+  }
+
+  /* ファイル選択時：型・サイズ検証→圧縮→プレビュー生成 */
+  async function handleImagePick(file) {
+    const fm = state.form;
+    if (!file) return;
+    clearFormImage();
+    if (ACCEPTED_TYPES.indexOf(file.type) === -1) {
+      fm.imageError = '対応していない画像形式です。JPEG・PNG・WebPを選んでください。';
+      renderPost();
+      return;
+    }
+    if (file.size > MAX_SOURCE_BYTES) {
+      fm.imageError = '画像のサイズが大きすぎます（20MBまで）。';
+      renderPost();
+      return;
+    }
+    fm.imageBusy = true;
+    fm.imageError = '';
+    renderPost();
+    try {
+      const blob = await compressImage(file);
+      fm.image = blob;
+      fm.imageName = file.name || 'image';
+      fm.imagePreviewUrl = URL.createObjectURL(blob);
+      fm.imageBusy = false;
+      renderPost();
+    } catch (e) {
+      fm.imageBusy = false;
+      fm.image = null;
+      fm.imageError = '画像の処理に失敗しました。別の写真でお試しください。';
+      renderPost();
+    }
   }
 
   /* 対象ピッカー（モーダル） */
@@ -450,6 +599,8 @@ import {
     const body = fm.body.trim();
     if (chars(body) < BODY_MIN) err.push('感想は' + BODY_MIN + '文字以上で入力してください');
     if (chars(body) > BODY_MAX) err.push('感想は' + BODY_MAX + '文字以内にしてください');
+    if (fm.image && !fm.imageConsent)
+      err.push('写真の確認事項にチェックを入れてください');
     return err;
   }
 
@@ -489,29 +640,52 @@ import {
       return;
     }
 
+    const hasImage = !!fm.image;
     fm.submitting = true;
     renderPost();
     try {
+      let imageUrl = null, imagePublicId = null;
+      if (hasImage) {
+        try {
+          const up = await uploadImage(fm.image);
+          imageUrl = up.url;
+          imagePublicId = up.publicId;
+        } catch (e) {
+          fm.submitting = false;
+          fm.errors = ['写真のアップロードに失敗しました。' +
+            '通信環境を確認して、もう一度お試しください。'];
+          renderPost(); window.scrollTo(0, 0);
+          return;
+        }
+      }
+
       const tt = TT_BY_TYPE[fm.targetType];
       await createPost({
         name: name,
         day: fm.day,
-        instagram: normInstagram(fm.instagram),
+        snsUrl: normSnsUrl(fm.snsUrl),
         body: body,
         targetType: fm.targetType,
         targetId: tt.pick ? fm.targetId : null,
         targetName: fm.targetName || tt.label,
+        imageUrl: imageUrl,
+        imagePublicId: imagePublicId,
         clientFlags: ng.soft ? ['ng_soft'] : []
       });
 
       save('mma_lastpost', Date.now());
-      /* フォームをリセット */
+      /* フォームをリセット（画像系stateも解放） */
+      clearFormImage();
       state.form = {
-        name: name, day: '', instagram: '', body: '',
+        name: name, day: '', snsUrl: '', body: '',
         targetType: '', targetId: null, targetName: '',
+        image: null, imageName: '', imagePreviewUrl: '',
+        imageConsent: false, imageBusy: false, imageError: '',
         errors: [], submitting: false, piiOk: false
       };
-      toast('感想を投稿しました。ありがとうございます');
+      toast(hasImage
+        ? '画像つきの投稿は、運営の確認後に表示されます。ありがとうございます'
+        : '感想を投稿しました。ありがとうございます');
       loadFeed(true);
       switchView('feed');
     } catch (e) {
@@ -604,44 +778,79 @@ import {
   }
 
   async function openTargetPosts(targetType, targetId, targetName) {
+    let order = 'desc';
+
     const wrap = el('div', '');
     wrap.innerHTML = '<div class="modal__handle"></div>' +
       '<div class="modal__title">' + esc(targetName) + ' への感想</div>' +
+      '<div class="tp-count" id="tpCount"></div>' +
+      '<div class="tp-sort" id="tpSort"></div>' +
       '<div id="tpList"><div class="loading">読み込んでいます…</div></div>';
     openModal(wrap);
+
     if (!FIREBASE_READY) {
       $('#tpList').innerHTML =
         '<div class="empty">接続設定が未完了のため表示できません。</div>';
       return;
     }
-    try {
-      const res = await fetchByTarget(targetType, targetId, null);
+
+    /* 並び替えトグル */
+    function drawSort() {
+      const sortBox = $('#tpSort');
+      if (!sortBox) return;
+      sortBox.innerHTML = '';
+      [{ k: 'desc', label: '新着順' }, { k: 'asc', label: '古い順' }].forEach(o => {
+        const c = el('button', 'chip tp-sort__chip' +
+          (order === o.k ? ' active' : ''), o.label);
+        c.onclick = () => {
+          if (order === o.k) return;
+          order = o.k;
+          drawSort();
+          loadList();
+        };
+        sortBox.appendChild(c);
+      });
+    }
+    drawSort();
+
+    /* 件数表示 */
+    countByTarget(targetType, targetId).then(n => {
+      const c = $('#tpCount');
+      if (c) c.textContent = '感想 ' + n + '件';
+    }).catch(() => {});
+
+    async function loadList() {
       const box = $('#tpList');
       if (!box) return;
-      box.innerHTML = '';
-      if (!res.posts.length) {
-        box.appendChild(el('div', 'empty',
-          'まだ感想がありません。<br>最初の感想を書いてみませんか。'));
-        const b = el('button', 'btn btn--primary', '✍️ この対象の感想を書く');
-        b.style.margin = '12px auto 0';
-        b.style.display = 'block';
-        b.onclick = () => {
-          state.form.targetType = targetType;
-          state.form.targetId = targetId;
-          state.form.targetName = targetName;
-          closeModal();
-          switchView('post');
-        };
-        box.appendChild(b);
-        return;
+      box.innerHTML = '<div class="loading">読み込んでいます…</div>';
+      try {
+        const res = await fetchByTarget(targetType, targetId, null, order);
+        if (!$('#tpList')) return;
+        box.innerHTML = '';
+        if (!res.posts.length) {
+          box.appendChild(el('div', 'empty',
+            'まだ感想がありません。<br>最初の感想を書いてみませんか。'));
+          const b = el('button', 'btn btn--primary', '✍️ この対象の感想を書く');
+          b.style.margin = '12px auto 0';
+          b.style.display = 'block';
+          b.onclick = () => {
+            state.form.targetType = targetType;
+            state.form.targetId = targetId;
+            state.form.targetName = targetName;
+            closeModal();
+            switchView('post');
+          };
+          box.appendChild(b);
+          return;
+        }
+        res.posts.forEach(p => box.appendChild(postCard(p)));
+      } catch (e) {
+        if (box) box.innerHTML =
+          '<div class="errbox">読み込みに失敗しました。索引（複合インデックス）が' +
+          '未作成の可能性があります。READMEを確認してください。</div>';
       }
-      res.posts.forEach(p => box.appendChild(postCard(p)));
-    } catch (e) {
-      const box = $('#tpList');
-      if (box) box.innerHTML =
-        '<div class="errbox">読み込みに失敗しました。索引（複合インデックス）が' +
-        '未作成の可能性があります。READMEを確認してください。</div>';
     }
+    loadList();
   }
 
   /* ============================================================
@@ -661,18 +870,43 @@ import {
     root.appendChild(el('div', 'card',
       '<p class="field__hint">' +
       '・このアプリは位置情報・端末情報・アクセス解析を取得しません。<br>' +
-      '・投稿に含まれるのは、あなたが自分で入力した情報（名前・曜日・Instagram・' +
-      '感想）だけです。<br>' +
-      '・名前はニックネームで構いません。個人が特定できる情報は書かないでください。' +
+      '・投稿に含まれるのは、あなたが自分で入力した情報（名前・曜日・SNSのURL・' +
+      '感想・写真）だけです。<br>' +
+      '・名前はニックネームで構いません。個人が特定できる情報は書かないでください。<br>' +
+      '・写真をアップロードする際、位置情報（EXIF）は自動で削除されます。' +
+      '</p>'));
+
+    root.appendChild(secTitle('写真投稿について', 'PHOTOS'));
+    root.appendChild(el('div', 'card',
+      '<p class="field__hint">' +
+      '・写真は自分で撮影したものだけを投稿してください。公式ビジュアル、' +
+      '出演者のステージ写真、他人の作品・SNS投稿の転載はできません。<br>' +
+      '・他人が写っている写真は、本人の同意を得てから投稿してください。<br>' +
+      '・写真つきの投稿は、運営が内容を確認してから公開されます' +
+      '（即時公開ではありません）。<br>' +
+      '・アップロード時に、写真の位置情報（EXIF）は自動で削除されます。' +
       '</p>'));
 
     root.appendChild(secTitle('投稿のルール', 'RULES'));
     root.appendChild(el('div', 'card',
       '<p class="field__hint">' +
       '・誹謗中傷にあたる表現が含まれる投稿はできません。<br>' +
+      '・事実に基づかない断定的な中傷や、営業妨害にあたる表現は投稿できません。<br>' +
       '・投稿の編集・削除はできません。書く前に内容を確認してください。<br>' +
       '・不適切な投稿を見つけたら、各投稿の「⚐ 通報」から知らせてください。' +
       '運営が確認し、必要に応じて非表示にします。' +
+      '</p>'));
+
+    root.appendChild(secTitle('削除依頼の窓口', 'TAKEDOWN'));
+    const takedownHasUrl = TAKEDOWN_FORM_URL.indexOf('REPLACE') === -1;
+    root.appendChild(el('div', 'card',
+      '<p class="field__hint">' +
+      '掲載されている店舗・アーティスト・権利者の方で、投稿の削除をご希望の' +
+      '場合は、以下の窓口からご連絡ください。内容を確認し、対応します。<br>' +
+      (takedownHasUrl
+        ? '<a href="' + esc(TAKEDOWN_FORM_URL) + '" target="_blank" ' +
+          'rel="noopener">削除依頼フォームを開く</a>'
+        : '<span class="takedown-pending">（受付窓口は準備中です）</span>') +
       '</p>'));
 
     root.appendChild(secTitle('データの出典', 'SOURCE'));
@@ -754,6 +988,17 @@ import {
     if (modalLastFocus && modalLastFocus.focus) {
       try { modalLastFocus.focus(); } catch (e) {}
     }
+  }
+
+  /* ============================================================
+     ライトボックス（画像の拡大表示）
+  ============================================================ */
+  function openLightbox(url) {
+    const wrap = el('div', '');
+    wrap.innerHTML = '<div class="modal__handle"></div>' +
+      '<div class="lightbox"><img class="lightbox-image" src="' + esc(url) +
+      '" alt="投稿された写真"></div>';
+    openModal(wrap);
   }
 
   /* ============================================================

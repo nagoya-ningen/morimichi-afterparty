@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>森道 After party 管理</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#1f2227;
+    --panel:#2a2e35;
+    --panel-2:#323742;
+    --line:#3c424d;
+    --text:#e7e9ec;
+    --muted:#9aa1ad;
+    --accent:#4f8ef7;
+    --accent-d:#3a73d4;
+    --ok:#3fae6b;
+    --ok-d:#33945a;
+    --warn:#e0a83a;
+    --danger:#d35b53;
+    --danger-d:#b9473f;
+    --radius:12px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:'IBM Plex Sans JP',system-ui,-apple-system,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    line-height:1.65;
+    font-size:15px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:640px;margin:0 auto;padding:0 14px env(safe-area-inset-bottom);}
+  a{color:var(--accent);}
+
+  /* ===== ヘッダー ===== */
+  .topbar{
+    position:sticky;top:0;z-index:20;
+    background:var(--panel);
+    border-bottom:1px solid var(--line);
+    padding:10px 14px;
+    display:flex;align-items:center;gap:10px;
+  }
+  .topbar .ttl{font-weight:700;font-size:15px;flex:1;min-width:0;}
+  .topbar .me{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:42%;}
+
+  /* ===== ボタン ===== */
+  .btn{
+    font-family:inherit;font-size:14px;font-weight:600;
+    border:none;border-radius:10px;
+    padding:11px 14px;color:#fff;cursor:pointer;
+    background:var(--accent);transition:opacity .15s,background .15s;
+    line-height:1.3;
+  }
+  .btn:active{opacity:.8;}
+  .btn:disabled{opacity:.45;cursor:default;}
+  .btn-ok{background:var(--ok);}
+  .btn-danger{background:var(--danger);}
+  .btn-ghost{background:var(--panel-2);color:var(--text);border:1px solid var(--line);}
+  .btn-sm{padding:8px 12px;font-size:13px;}
+  .btn-block{display:block;width:100%;}
+
+  /* ===== ログイン ===== */
+  .login{padding:40px 0 60px;}
+  .login h1{font-size:20px;margin:0 0 6px;}
+  .login .note{color:var(--muted);font-size:13px;margin:0 0 24px;}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;}
+  .field input{
+    width:100%;font-family:inherit;font-size:16px;
+    background:var(--panel);color:var(--text);
+    border:1px solid var(--line);border-radius:10px;
+    padding:12px;
+  }
+  .field input:focus{outline:none;border-color:var(--accent);}
+  .errbox{
+    background:rgba(211,91,83,.14);
+    border:1px solid var(--danger);
+    color:#f0b4b0;
+    border-radius:10px;padding:10px 12px;font-size:13px;
+    margin-bottom:14px;
+  }
+  .infobox{
+    background:var(--panel);border:1px solid var(--line);
+    color:var(--muted);border-radius:10px;padding:14px;font-size:13px;
+  }
+
+  /* ===== タブ ===== */
+  .tabs{
+    display:flex;gap:6px;margin:14px 0 4px;
+  }
+  .tab{
+    flex:1;text-align:center;
+    font-family:inherit;font-size:14px;font-weight:600;
+    padding:10px 6px;border-radius:10px;cursor:pointer;
+    background:var(--panel);color:var(--muted);
+    border:1px solid var(--line);
+  }
+  .tab.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .tab .count{
+    display:inline-block;min-width:18px;font-size:11px;
+    background:rgba(0,0,0,.25);border-radius:9px;padding:0 5px;margin-left:4px;
+  }
+
+  /* ===== カード ===== */
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:14px;margin:12px 0;
+  }
+  .card .meta{font-size:12px;color:var(--muted);margin-bottom:6px;}
+  .card .target{font-weight:700;font-size:15px;margin-bottom:2px;}
+  .card .ttype{font-size:11px;color:var(--muted);margin-bottom:8px;}
+  .card .body{
+    white-space:pre-wrap;word-break:break-word;
+    font-size:14px;margin:8px 0;
+  }
+  .card .author{font-size:12px;color:var(--muted);margin-top:6px;}
+  .card .thumb{
+    margin:10px 0;border-radius:10px;overflow:hidden;
+    background:var(--panel-2);
+  }
+  .card .thumb img{display:block;width:100%;height:auto;cursor:zoom-in;}
+  .badges{margin:6px 0;display:flex;flex-wrap:wrap;gap:6px;}
+  .badge{
+    font-size:11px;font-weight:600;border-radius:7px;padding:3px 8px;
+  }
+  .badge-warn{background:rgba(224,168,58,.18);color:var(--warn);border:1px solid var(--warn);}
+  .badge-status{background:var(--panel-2);color:var(--muted);border:1px solid var(--line);}
+  .badge-hidden{background:rgba(211,91,83,.18);color:var(--danger);border:1px solid var(--danger);}
+  .badge-pub{background:rgba(63,174,107,.18);color:var(--ok);border:1px solid var(--ok);}
+  .card-actions{display:flex;gap:8px;margin-top:12px;}
+  .card-actions .btn{flex:1;}
+
+  .embed{
+    margin-top:10px;border-top:1px dashed var(--line);padding-top:10px;
+  }
+
+  .empty{
+    text-align:center;color:var(--muted);font-size:14px;
+    padding:40px 0;
+  }
+  .loading{text-align:center;color:var(--muted);font-size:13px;padding:20px 0;}
+
+  .toolbar{margin:14px 0;}
+
+  /* ===== トースト ===== */
+  .toast{
+    position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);
+    background:#11141a;color:#fff;border:1px solid var(--line);
+    padding:11px 18px;border-radius:24px;font-size:13px;font-weight:600;
+    opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;
+    z-index:50;max-width:90vw;text-align:center;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  .toast.err{border-color:var(--danger);color:#f0b4b0;}
+
+  /* ===== 画像ライトボックス ===== */
+  .lightbox{
+    position:fixed;inset:0;background:rgba(0,0,0,.92);
+    display:none;align-items:center;justify-content:center;
+    z-index:60;padding:16px;
+  }
+  .lightbox.show{display:flex;}
+  .lightbox img{max-width:100%;max-height:100%;border-radius:8px;}
+  .lightbox .close{
+    position:absolute;top:12px;right:14px;
+    background:rgba(255,255,255,.12);color:#fff;border:none;
+    width:40px;height:40px;border-radius:50%;font-size:20px;cursor:pointer;
+  }
+
+  .hidden{display:none !important;}
+</style>
+</head>
+<body>
+
+<!-- ===== ログイン前 ===== -->
+<section id="view-login" class="wrap login hidden">
+  <h1>森道 After party 管理</h1>
+  <p class="note">運営者専用のページです。</p>
+
+  <div id="login-firebase-ng" class="infobox hidden">
+    Firebaseが未設定です。<code>js/firebase.js</code> の設定値を入力してから利用してください。
+  </div>
+
+  <form id="login-form">
+    <div id="login-error" class="errbox hidden"></div>
+    <div class="field">
+      <label for="login-email">メールアドレス</label>
+      <input id="login-email" type="email" autocomplete="username" inputmode="email" required>
+    </div>
+    <div class="field">
+      <label for="login-password">パスワード</label>
+      <input id="login-password" type="password" autocomplete="current-password" required>
+    </div>
+    <button id="login-submit" type="submit" class="btn btn-block">ログイン</button>
+  </form>
+</section>
+
+<!-- ===== ログイン後 ===== -->
+<section id="view-admin" class="hidden">
+  <header class="topbar">
+    <span class="ttl">森道 After party 管理</span>
+    <span id="admin-email" class="me"></span>
+    <button id="logout-btn" class="btn btn-ghost btn-sm">ログアウト</button>
+  </header>
+
+  <div class="wrap">
+    <div class="tabs">
+      <button id="tab-pending" class="tab active" data-tab="pending">
+        承認待ち<span id="cnt-pending" class="count hidden">0</span>
+      </button>
+      <button id="tab-reports" class="tab" data-tab="reports">
+        通報<span id="cnt-reports" class="count hidden">0</span>
+      </button>
+    </div>
+
+    <div id="panel-pending">
+      <div id="list-pending"></div>
+      <div id="more-pending" class="toolbar hidden">
+        <button class="btn btn-ghost btn-block" data-more="pending">もっと見る</button>
+      </div>
+    </div>
+
+    <div id="panel-reports" class="hidden">
+      <div id="list-reports"></div>
+      <div id="more-reports" class="toolbar hidden">
+        <button class="btn btn-ghost btn-block" data-more="reports">もっと見る</button>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <button id="backup-btn" class="btn btn-ghost btn-block">全投稿をバックアップ（JSONダウンロード）</button>
+    </div>
+  </div>
+</section>
+
+<div id="toast" class="toast"></div>
+
+<div id="lightbox" class="lightbox">
+  <button id="lightbox-close" class="close" aria-label="閉じる">×</button>
+  <img id="lightbox-img" alt="">
+</div>
+
+<script type="module" src="js/admin.js"></script>
+</body>
+</html>

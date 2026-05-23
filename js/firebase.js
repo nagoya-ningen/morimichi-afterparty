@@ -1,97 +1,83 @@
 /* ===================================================================
-   森道 After party — Firebase接続（テキスト投稿のみ・写真機能なし版）
+   森道 After party — Firebase接続（画像投稿・事前承認制 対応版）
 
    ・公開フィード型SNSをサーバコードなしで実現（クライアントSDKのみ）。
-   ・匿名認証：起動時に signInAnonymously。UIDはレート制限・モデレーション
-     用の内部IDで、ユーザーには表示しない。
+   ・公開ページ(index.html)：匿名認証。UIDはレート制限・通報用の内部IDで、
+     ユーザーには表示しない。
+   ・管理ページ(admin.html)：メール＋パスワードでログイン（運営者専用）。
+   ・画像つき投稿は status:'pending' で保存され、運営が承認するまで
+     公開フィードに表示されない（事前承認制）。
+   ・投稿の承認・非表示・削除はクライアントの一般ユーザーからは不可
+     （Security Rules で運営のみに制限）。
    ・App Check（reCAPTCHA v3）：Botによる直接書き込みを遮断。必須。
-   ・投稿の編集・削除はクライアントから不可（Security Rulesで禁止）。
-   ・Firebase SDK は動的import。未設定（REPLACE_のまま）の場合は
-     外部リクエストを一切行わず、アプリは閲覧不可・投稿不可で起動する。
-   ・写真機能は未実装（Cloud Storage / Blazeプランが不要なように）。
-     将来追加する場合は Storage を有効化し createPost を拡張する。
 
-   ▼ セットアップ：下の firebaseConfig と RECAPTCHA_SITE_KEY を
+   ▼ セットアップ：firebaseConfig と RECAPTCHA_SITE_KEY を
      自分のFirebaseプロジェクトの値に置き換える（手順は README 参照）。
 =================================================================== */
 
 /* ===== セットアップ：ここを自分のプロジェクトの値に置き換える ===== */
 const firebaseConfig = {
-  apiKey:            'REPLACE_WITH_YOUR_API_KEY',
-  authDomain:        'REPLACE_PROJECT.firebaseapp.com',
-  projectId:         'REPLACE_PROJECT',
-  storageBucket:     'REPLACE_PROJECT.appspot.com',
-  messagingSenderId: 'REPLACE_SENDER_ID',
-  appId:             'REPLACE_APP_ID'
+  apiKey:            'AIzaSyBfgFnnvUlE46vb9qdZtMhr5O7diJJggd8',
+  authDomain:        'nagoya-ningen.firebaseapp.com',
+  projectId:         'nagoya-ningen',
+  storageBucket:     'nagoya-ningen.firebasestorage.app',
+  messagingSenderId: '300784700896',
+  appId:             '1:300784700896:web:daf20ee549b0903f66af85'
 };
 /* reCAPTCHA v3 のサイトキー（App Check用） */
-const RECAPTCHA_SITE_KEY = 'REPLACE_WITH_RECAPTCHA_V3_SITE_KEY';
+const RECAPTCHA_SITE_KEY = '6LdE6fgsAAAAANH3mCTuXmtBzoSr02trtPs-JthY';
 /* ================================================================ */
 
 const SDK_VER = 'https://www.gstatic.com/firebasejs/10.14.1/';
 const FEED_PAGE = 20;
 
-function isConfigured() {
-  return firebaseConfig.apiKey.indexOf('REPLACE') === -1;
+/* 設定済みかどうか（app.js / admin.js から参照） */
+export const FIREBASE_READY = firebaseConfig.apiKey.indexOf('REPLACE') === -1;
+
+/* ---------- コア初期化（SDKロード・App Check。サインインは含まない） ---------- */
+let corePromise = null;
+function core() {
+  if (corePromise) return corePromise;
+  corePromise = (async () => {
+    if (!FIREBASE_READY) return null;
+    const [appM, acM, authM, fsM] = await Promise.all([
+      import(SDK_VER + 'firebase-app.js'),
+      import(SDK_VER + 'firebase-app-check.js'),
+      import(SDK_VER + 'firebase-auth.js'),
+      import(SDK_VER + 'firebase-firestore.js')
+    ]);
+    const app = appM.initializeApp(firebaseConfig);
+    try {
+      acM.initializeAppCheck(app, {
+        provider: new acM.ReCaptchaV3Provider(RECAPTCHA_SITE_KEY),
+        isTokenAutoRefreshEnabled: true
+      });
+    } catch (e) { /* App Check 初期化失敗でもアプリは継続 */ }
+    return {
+      app,
+      auth: authM.getAuth(app),
+      db: fsM.getFirestore(app),
+      authM,
+      fs: fsM
+    };
+  })();
+  return corePromise;
 }
-/* 設定済みかどうかを app.js から確認するためのフラグ */
-export const FIREBASE_READY = isConfigured();
 
-/* SDKの動的ロード・初期化・匿名認証をまとめた Promise。
-   未設定なら一切importせず null を返す（外部アクセスなし）。 */
-const initPromise = (async () => {
-  if (!FIREBASE_READY) return null;
-  const [appM, acM, authM, fsM] = await Promise.all([
-    import(SDK_VER + 'firebase-app.js'),
-    import(SDK_VER + 'firebase-app-check.js'),
-    import(SDK_VER + 'firebase-auth.js'),
-    import(SDK_VER + 'firebase-firestore.js')
-  ]);
-  const app = appM.initializeApp(firebaseConfig);
-  try {
-    acM.initializeAppCheck(app, {
-      provider: new acM.ReCaptchaV3Provider(RECAPTCHA_SITE_KEY),
-      isTokenAutoRefreshEnabled: true
-    });
-  } catch (e) { /* App Check 初期化失敗でもアプリは継続 */ }
-
-  const auth = authM.getAuth(app);
-  const db = fsM.getFirestore(app);
-
-  /* 匿名認証 */
-  const user = await new Promise((resolve) => {
-    authM.onAuthStateChanged(auth, (u) => { if (u) resolve(u); });
-    authM.signInAnonymously(auth).catch(() => resolve(null));
-  });
-
-  return { app, auth, db, fs: fsM, user };
-})();
-
-/* 匿名認証の完了（user か null）を待つ Promise。 */
-export const authReady = initPromise.then(c => c ? c.user : null);
-
-/* ---------- 投稿の作成（テキストのみ） ---------- */
-export async function createPost(fields) {
-  const c = await initPromise;
-  if (!c) throw new Error('not-configured');
-  if (!c.user) throw new Error('auth-failed');
-  const { collection, addDoc, serverTimestamp } = c.fs;
-
-  const ref = await addDoc(collection(c.db, 'posts'), {
-    name:        fields.name,
-    day:         fields.day,
-    instagram:   fields.instagram || null,
-    body:        fields.body,
-    targetType:  fields.targetType,
-    targetId:    fields.targetId || null,
-    targetName:  fields.targetName,
-    createdAt:   serverTimestamp(),
-    authorUid:   c.user.uid,
-    hidden:      false,
-    reportCount: 0,
-    clientFlags: fields.clientFlags || []
-  });
-  return ref.id;
+/* ---------- 公開ページ用：匿名サインインを保証 ---------- */
+let anonPromise = null;
+function ensureAnon() {
+  if (anonPromise) return anonPromise;
+  anonPromise = (async () => {
+    const c = await core();
+    if (!c) return null;
+    if (!c.auth.currentUser) {
+      try { await c.authM.signInAnonymously(c.auth); }
+      catch (e) { /* 失敗時は currentUser=null のまま */ }
+    }
+    return c;
+  })();
+  return anonPromise;
 }
 
 function packResult(snap) {
@@ -104,13 +90,144 @@ function packResult(snap) {
   };
 }
 
-/* ---------- フィード取得（新着順・ページネーション） ---------- */
+/* ===================================================================
+   公開ページ用 API（index.html / app.js）
+=================================================================== */
+
+/* ---------- 投稿の作成 ----------
+   fields: { name, day, snsUrl, body, targetType, targetId, targetName,
+             clientFlags, imageUrl, imagePublicId }
+   imageUrl があれば status='pending'（事前承認制）、なければ 'published'。 */
+export async function createPost(fields) {
+  const c = await ensureAnon();
+  if (!c) throw new Error('not-configured');
+  const user = c.auth.currentUser;
+  if (!user) throw new Error('auth-failed');
+  const { collection, addDoc, serverTimestamp } = c.fs;
+  const hasImage = !!fields.imageUrl;
+
+  const ref = await addDoc(collection(c.db, 'posts'), {
+    name:          fields.name,
+    day:           fields.day,
+    snsUrl:        fields.snsUrl || null,
+    body:          fields.body,
+    targetType:    fields.targetType,
+    targetId:      fields.targetId || null,
+    targetName:    fields.targetName,
+    imageUrl:      fields.imageUrl || null,
+    imagePublicId: fields.imagePublicId || null,
+    imageConsent:  hasImage,
+    status:        hasImage ? 'pending' : 'published',
+    createdAt:     serverTimestamp(),
+    authorUid:     user.uid,
+    hidden:        false,
+    reportCount:   0,
+    clientFlags:   fields.clientFlags || []
+  });
+  return ref.id;
+}
+
+/* ---------- フィード取得（公開・新着順・ページネーション） ---------- */
 export async function fetchFeed(cursor) {
-  const c = await initPromise;
+  const c = await ensureAnon();
   if (!c) return { posts: [], lastDoc: null, hasMore: false };
   const { collection, query, where, orderBy, limit, startAfter, getDocs } = c.fs;
   const parts = [
     collection(c.db, 'posts'),
+    where('hidden', '==', false),
+    where('status', '==', 'published'),
+    orderBy('createdAt', 'desc')
+  ];
+  if (cursor) parts.push(startAfter(cursor));
+  parts.push(limit(FEED_PAGE));
+  const snap = await getDocs(query.apply(null, parts));
+  return packResult(snap);
+}
+
+/* ---------- 対象別の投稿取得（公開）----------
+   order: 'desc'（新着順・既定）/ 'asc'（古い順）
+   複合インデックスが必要（README参照）。 */
+export async function fetchByTarget(targetType, targetId, cursor, order) {
+  const c = await ensureAnon();
+  if (!c) return { posts: [], lastDoc: null, hasMore: false };
+  const { collection, query, where, orderBy, limit, startAfter, getDocs } = c.fs;
+  const parts = [
+    collection(c.db, 'posts'),
+    where('hidden', '==', false),
+    where('status', '==', 'published'),
+    where('targetType', '==', targetType)
+  ];
+  if (targetId) parts.push(where('targetId', '==', targetId));
+  parts.push(orderBy('createdAt', order === 'asc' ? 'asc' : 'desc'));
+  if (cursor) parts.push(startAfter(cursor));
+  parts.push(limit(FEED_PAGE));
+  const snap = await getDocs(query.apply(null, parts));
+  return packResult(snap);
+}
+
+/* ---------- 対象別の感想件数（公開・集計クエリ） ---------- */
+export async function countByTarget(targetType, targetId) {
+  const c = await ensureAnon();
+  if (!c) return 0;
+  const { collection, query, where, getCountFromServer } = c.fs;
+  const parts = [
+    collection(c.db, 'posts'),
+    where('hidden', '==', false),
+    where('status', '==', 'published'),
+    where('targetType', '==', targetType)
+  ];
+  if (targetId) parts.push(where('targetId', '==', targetId));
+  try {
+    const snap = await getCountFromServer(query.apply(null, parts));
+    return snap.data().count;
+  } catch (e) { return 0; }
+}
+
+/* ---------- 通報 ---------- */
+export async function reportPost(postId, reason) {
+  const c = await ensureAnon();
+  if (!c) throw new Error('not-configured');
+  if (!c.auth.currentUser) throw new Error('auth-failed');
+  const { collection, addDoc, serverTimestamp } = c.fs;
+  await addDoc(collection(c.db, 'reports'), {
+    postId:      postId,
+    reason:      reason || '',
+    reporterUid: c.auth.currentUser.uid,
+    createdAt:   serverTimestamp()
+  });
+}
+
+/* ===================================================================
+   管理ページ用 API（admin.html / admin.js）
+   ※ これらは運営者が email/password でログインしている前提。
+=================================================================== */
+
+/* ---------- 管理者ログイン / ログアウト / 状態監視 ---------- */
+export async function adminSignIn(email, password) {
+  const c = await core();
+  if (!c) throw new Error('not-configured');
+  const cred = await c.authM.signInWithEmailAndPassword(c.auth, email, password);
+  return cred.user;
+}
+export async function adminSignOut() {
+  const c = await core();
+  if (c) await c.authM.signOut(c.auth);
+}
+/* cb(user|null) を認証状態が変わるたびに呼ぶ。 */
+export async function onAdminChanged(cb) {
+  const c = await core();
+  if (!c) { cb(null); return; }
+  c.authM.onAuthStateChanged(c.auth, (u) => cb(u));
+}
+
+/* ---------- 承認待ち（画像つき pending）投稿の取得 ---------- */
+export async function fetchPending(cursor) {
+  const c = await core();
+  if (!c) return { posts: [], lastDoc: null, hasMore: false };
+  const { collection, query, where, orderBy, limit, startAfter, getDocs } = c.fs;
+  const parts = [
+    collection(c.db, 'posts'),
+    where('status', '==', 'pending'),
     where('hidden', '==', false),
     orderBy('createdAt', 'desc')
   ];
@@ -120,35 +237,66 @@ export async function fetchFeed(cursor) {
   return packResult(snap);
 }
 
-/* ---------- 対象別の投稿取得 ----------
-   複合インデックスが必要（README参照）。 */
-export async function fetchByTarget(targetType, targetId, cursor) {
-  const c = await initPromise;
-  if (!c) return { posts: [], lastDoc: null, hasMore: false };
-  const { collection, query, where, orderBy, limit, startAfter, getDocs } = c.fs;
-  const parts = [
-    collection(c.db, 'posts'),
-    where('hidden', '==', false),
-    where('targetType', '==', targetType)
-  ];
-  if (targetId) parts.push(where('targetId', '==', targetId));
-  parts.push(orderBy('createdAt', 'desc'));
+/* ---------- 通報一覧の取得 ---------- */
+export async function fetchReports(cursor) {
+  const c = await core();
+  if (!c) return { reports: [], lastDoc: null, hasMore: false };
+  const { collection, query, orderBy, limit, startAfter, getDocs } = c.fs;
+  const parts = [collection(c.db, 'reports'), orderBy('createdAt', 'desc')];
   if (cursor) parts.push(startAfter(cursor));
   parts.push(limit(FEED_PAGE));
   const snap = await getDocs(query.apply(null, parts));
-  return packResult(snap);
+  const reports = [];
+  snap.forEach(d => { const o = d.data(); o.id = d.id; reports.push(o); });
+  return {
+    reports: reports,
+    lastDoc: snap.docs.length ? snap.docs[snap.docs.length - 1] : null,
+    hasMore: snap.docs.length === FEED_PAGE
+  };
 }
 
-/* ---------- 通報 ---------- */
-export async function reportPost(postId, reason) {
-  const c = await initPromise;
+/* ---------- 投稿1件の取得（通報された投稿の確認用） ---------- */
+export async function getPost(postId) {
+  const c = await core();
+  if (!c) return null;
+  const { doc, getDoc } = c.fs;
+  const d = await getDoc(doc(c.db, 'posts', postId));
+  if (!d.exists()) return null;
+  const o = d.data(); o.id = d.id;
+  return o;
+}
+
+/* ---------- 承認（pending → published） ---------- */
+export async function approvePost(postId) {
+  const c = await core();
   if (!c) throw new Error('not-configured');
-  if (!c.user) throw new Error('auth-failed');
-  const { collection, addDoc, serverTimestamp } = c.fs;
-  await addDoc(collection(c.db, 'reports'), {
-    postId:      postId,
-    reason:      reason || '',
-    reporterUid: c.user.uid,
-    createdAt:   serverTimestamp()
-  });
+  const { doc, updateDoc } = c.fs;
+  await updateDoc(doc(c.db, 'posts', postId), { status: 'published' });
+}
+
+/* ---------- 非表示 / 再表示 ---------- */
+export async function hidePost(postId) {
+  const c = await core();
+  if (!c) throw new Error('not-configured');
+  const { doc, updateDoc } = c.fs;
+  await updateDoc(doc(c.db, 'posts', postId), { hidden: true });
+}
+export async function unhidePost(postId) {
+  const c = await core();
+  if (!c) throw new Error('not-configured');
+  const { doc, updateDoc } = c.fs;
+  await updateDoc(doc(c.db, 'posts', postId), { hidden: false });
+}
+
+/* ---------- 全投稿のエクスポート（バックアップ用） ---------- */
+export async function fetchAllPostsForExport() {
+  const c = await core();
+  if (!c) return [];
+  const { collection, query, orderBy, getDocs } = c.fs;
+  const snap = await getDocs(
+    query(collection(c.db, 'posts'), orderBy('createdAt', 'desc'))
+  );
+  const posts = [];
+  snap.forEach(d => { const o = d.data(); o.id = d.id; posts.push(o); });
+  return posts;
 }

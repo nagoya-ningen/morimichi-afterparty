@@ -2,7 +2,7 @@
    コード（html/css/js）はネットワーク優先＝常に最新を表示。
    アイコン画像はキャッシュ優先。
    Firebase / Google Fonts 等の外部オリジンは素通し（介入しない）。 */
-const CACHE = 'mma-v2';
+const CACHE = 'mma-v3';
 
 /* 起動に最低限必要なファイル。1つでも失敗すると addAll は全体失敗するため
    個別に add し、失敗してもインストールを止めない。 */
@@ -13,6 +13,7 @@ const CORE = [
   './css/style.css',
   './js/data.js',
   './js/ngwords.js',
+  './js/image.js',
   './js/firebase.js',
   './js/app.js',
   './img/icon-192.png',
