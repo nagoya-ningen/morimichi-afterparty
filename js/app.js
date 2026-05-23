@@ -45,7 +45,7 @@ import {
     feed: { posts: [], lastDoc: null, hasMore: false, loading: false, loaded: false, error: '' },
     form: {
       name: '', days: [], snsUrl: '', body: '',
-      targetType: '', targetId: null, targetName: '',
+      targetType: '', targetId: null, targetName: '', targetMode: 'pick',
       image: null, imageName: '', imagePreviewUrl: '',
       imageConsent: false, imageBusy: false, imageError: '',
       errors: [], submitting: false, piiOk: false
@@ -391,6 +391,7 @@ import {
         fm.targetType = t.type;
         fm.targetId = null;
         fm.targetName = t.pick ? '' : t.label;
+        fm.targetMode = 'pick';
         renderPost();
       };
       tgrid.appendChild(tile);
@@ -399,18 +400,62 @@ import {
     ttField.querySelector('.field__body').appendChild(tgrid);
     form.appendChild(ttField);
 
-    /* 対象の具体選択（pick:true のときだけ） */
+    /* 対象の具体選択（pick:true のときだけ）
+       「リストから選ぶ／自分で入力」の2モードをトグル切替。 */
     if (fm.targetType && TT_BY_TYPE[fm.targetType].pick) {
-      const chosen = el('div', 'target-chosen');
-      chosen.innerHTML = fm.targetName
-        ? '<span class="tc-name">' + esc(fm.targetName) + '</span>'
-        : '<span class="tc-empty">未選択</span>';
-      const pickBtn = el('button', 'btn btn--ghost', fm.targetName ? '変更' : '選ぶ');
-      pickBtn.style.padding = '7px 12px';
-      pickBtn.onclick = () => openTargetPicker();
-      chosen.appendChild(pickBtn);
-      const cf = fieldWrap(TT_BY_TYPE[fm.targetType].label + 'を選択', true, '', '');
-      cf.querySelector('.field__body').appendChild(chosen);
+      const ttObj = TT_BY_TYPE[fm.targetType];
+      const cf = fieldWrap(ttObj.label + 'を選択', true, '', '');
+      const cfBody = cf.querySelector('.field__body');
+
+      /* モード切替トグル */
+      const modeBox = el('div', 'target-mode');
+      const modes = [
+        { k: 'pick', label: 'リストから選ぶ' },
+        { k: 'free', label: '自分で入力' }
+      ];
+      modes.forEach(m => {
+        const c = el('button',
+          'chip target-mode__chip' + (fm.targetMode === m.k ? ' active' : ''),
+          m.label);
+        c.setAttribute('aria-pressed', fm.targetMode === m.k ? 'true' : 'false');
+        c.onclick = () => {
+          if (fm.targetMode === m.k) return;
+          fm.targetMode = m.k;
+          /* モード切替時に他モードの入力はクリア */
+          fm.targetId = null;
+          fm.targetName = '';
+          renderPost();
+        };
+        modeBox.appendChild(c);
+      });
+      cfBody.appendChild(modeBox);
+
+      if (fm.targetMode === 'pick') {
+        /* リスト選択モード（従来通り） */
+        const chosen = el('div', 'target-chosen');
+        chosen.innerHTML = fm.targetName
+          ? '<span class="tc-name">' + esc(fm.targetName) + '</span>'
+          : '<span class="tc-empty">未選択</span>';
+        const pickLabel = (ttObj.type === 'shop' ? '店舗' : ttObj.label) + 'を選ぶ';
+        const pickBtn = el('button', 'btn btn--ghost', fm.targetName ? '変更' : pickLabel);
+        pickBtn.style.padding = '7px 12px';
+        pickBtn.onclick = () => openTargetPicker();
+        chosen.appendChild(pickBtn);
+        cfBody.appendChild(chosen);
+      } else {
+        /* 自分で入力モード */
+        const freeWrap = el('div', 'target-free');
+        const placeholder = (ttObj.type === 'shop' ? '店舗名' : ttObj.label + '名') +
+          'を入力（60文字以内）';
+        freeWrap.innerHTML =
+          '<input class="input" id="fTargetFree" maxlength="60" placeholder="' +
+          esc(placeholder) + '" value="' + esc(fm.targetName) + '">';
+        const hint = el('div', 'field__hint target-free__hint',
+          'リストにない場合や、自分の言葉で対象を書きたいときに。');
+        cfBody.appendChild(freeWrap);
+        cfBody.appendChild(hint);
+      }
+
       form.appendChild(cf);
     }
 
@@ -495,8 +540,10 @@ import {
 
     /* --- 入力イベントの結線 --- */
     const nameI = $('#fName'), snsI = $('#fSns'), bodyI = $('#fBody');
+    const tgtFreeI = $('#fTargetFree');
     if (nameI) nameI.oninput = () => { fm.name = nameI.value; };
     if (snsI) snsI.oninput = () => { fm.snsUrl = snsI.value; };
+    if (tgtFreeI) tgtFreeI.oninput = () => { fm.targetName = tgtFreeI.value; };
     if (bodyI) {
       const upd = () => {
         fm.body = bodyI.value;
@@ -586,8 +633,9 @@ import {
     items.forEach(it => it.nk = normKey(it.name));
 
     const wrap = el('div', '');
+    const pickerLabel = tt === 'shop' ? '店舗' : TT_BY_TYPE[tt].label;
     wrap.innerHTML = '<div class="modal__handle"></div>' +
-      '<div class="modal__title">' + esc(TT_BY_TYPE[tt].label) + 'をさがす</div>';
+      '<div class="modal__title">' + esc(pickerLabel) + 'をさがす</div>';
     const sb = el('div', 'searchbar');
     sb.style.position = 'static';
     sb.innerHTML = '<input class="input" id="pickQ" placeholder="名前で検索">';
@@ -631,8 +679,17 @@ import {
     else if (chars(name) > NAME_MAX) err.push('名前は' + NAME_MAX + '文字以内にしてください');
     if (!fm.days.length) err.push('行った曜日を選んでください（複数選択可）');
     if (!fm.targetType) err.push('感想の対象を選んでください');
-    else if (TT_BY_TYPE[fm.targetType].pick && !fm.targetId)
-      err.push(TT_BY_TYPE[fm.targetType].label + 'を選択してください');
+    else if (TT_BY_TYPE[fm.targetType].pick) {
+      const ttLabel = fm.targetType === 'shop' ? '店舗' : TT_BY_TYPE[fm.targetType].label;
+      if (fm.targetMode === 'free') {
+        const tname = (fm.targetName || '').trim();
+        if (!tname) err.push(ttLabel + '名を入力してください');
+        else if (chars(tname) > 60)
+          err.push(ttLabel + '名は60文字以内にしてください');
+      } else {
+        if (!fm.targetId) err.push(ttLabel + 'を選択してください');
+      }
+    }
     const body = fm.body.trim();
     if (chars(body) < BODY_MIN) err.push('感想は' + BODY_MIN + '文字以上で入力してください');
     if (chars(body) > BODY_MAX) err.push('感想は' + BODY_MAX + '文字以内にしてください');
@@ -650,7 +707,9 @@ import {
     const name = fm.name.trim(), body = fm.body.trim();
 
     /* 誹謗中傷フィルタ（hard＝ブロック） */
-    const ng = ngCheck(name + '\n' + body);
+    /* 自由入力モードの targetName も検査対象に含める */
+    const ngTarget = (fm.targetMode === 'free') ? (fm.targetName || '') : '';
+    const ng = ngCheck(name + '\n' + body + '\n' + ngTarget);
     if (ng.blocked) {
       fm.errors = ['不適切な表現が含まれている可能性があります。表現を見直してください。'];
       renderPost(); window.scrollTo(0, 0); return;
@@ -697,14 +756,21 @@ import {
       }
 
       const tt = TT_BY_TYPE[fm.targetType];
+      /* free モードは targetId=null・targetName=入力テキスト（trim 済み）。
+         pick モードは従来通り、id と name が紐づく。 */
+      const isFree = tt.pick && fm.targetMode === 'free';
+      const targetIdToSave = tt.pick ? (isFree ? null : fm.targetId) : null;
+      const targetNameToSave = tt.pick
+        ? (isFree ? (fm.targetName || '').trim() : fm.targetName)
+        : (fm.targetName || tt.label);
       await createPost({
         name: name,
         days: fm.days.slice(),
         snsUrl: normSnsUrl(fm.snsUrl),
         body: body,
         targetType: fm.targetType,
-        targetId: tt.pick ? fm.targetId : null,
-        targetName: fm.targetName || tt.label,
+        targetId: targetIdToSave,
+        targetName: targetNameToSave,
         imageUrl: imageUrl,
         imagePublicId: imagePublicId,
         clientFlags: ng.soft ? ['ng_soft'] : []
@@ -715,7 +781,7 @@ import {
       clearFormImage();
       state.form = {
         name: name, days: [], snsUrl: '', body: '',
-        targetType: '', targetId: null, targetName: '',
+        targetType: '', targetId: null, targetName: '', targetMode: 'pick',
         image: null, imageName: '', imagePreviewUrl: '',
         imageConsent: false, imageBusy: false, imageError: '',
         errors: [], submitting: false, piiOk: false
@@ -869,6 +935,7 @@ import {
             state.form.targetType = targetType;
             state.form.targetId = targetId;
             state.form.targetName = targetName;
+            state.form.targetMode = 'pick';
             closeModal();
             switchView('post');
           };
@@ -877,9 +944,10 @@ import {
         }
         res.posts.forEach(p => box.appendChild(postCard(p)));
       } catch (e) {
+        console.error('fetchByTarget failed:', e);
         if (box) box.innerHTML =
-          '<div class="errbox">読み込みに失敗しました。索引（複合インデックス）が' +
-          '未作成の可能性があります。READMEを確認してください。</div>';
+          '<div class="errbox">感想を読み込めませんでした。少し時間をおいて、' +
+          'もう一度お試しください。</div>';
       }
     }
     loadList();
@@ -914,8 +982,8 @@ import {
       '・写真は自分で撮影したものだけを投稿してください。公式ビジュアル、' +
       '出演者のステージ写真、他人の作品・SNS投稿の転載はできません。<br>' +
       '・他人が写っている写真は、本人の同意を得てから投稿してください。<br>' +
-      '・写真つきの投稿は、運営が内容を確認してから公開されます' +
-      '（即時公開ではありません）。<br>' +
+      '・写真つき投稿も即時公開されます。不適切な内容は、運営が通報経由で' +
+      '即時非表示にします。<br>' +
       '・アップロード時に、写真の位置情報（EXIF）は自動で削除されます。' +
       '</p>'));
 

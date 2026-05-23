@@ -610,8 +610,9 @@ function showAdminView(user) {
   const lb = $('login-submit');
   if (lb && FIREBASE_READY) { lb.disabled = false; lb.textContent = 'ログイン'; }
 
-  // 承認待ちタブを初期表示としてロード（未ロード時のみ）
-  if (!pendingState.started) loadPending(true);
+  // 通報タブを初期表示としてロード（未ロード時のみ）
+  // 事後モデレーション制のため、承認待ち（pending）は原則発生しない。
+  if (!reportState.started) loadReports(true);
 }
 
 /* ===================================================================

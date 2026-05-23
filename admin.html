@@ -7,159 +7,233 @@
 <title>森道 After party 管理</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;700&family=Montserrat:wght@500;700;800&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
+  /* 管理画面：森道公式のトーンに統一（白×黒罫×ブランド赤）。
+     ライト固定で運用（運営者のみが見るので可読性最優先）。 */
   :root{
-    --bg:#1f2227;
-    --panel:#2a2e35;
-    --panel-2:#323742;
-    --line:#3c424d;
-    --text:#e7e9ec;
-    --muted:#9aa1ad;
-    --accent:#4f8ef7;
-    --accent-d:#3a73d4;
-    --ok:#3fae6b;
-    --ok-d:#33945a;
-    --warn:#e0a83a;
-    --danger:#d35b53;
-    --danger-d:#b9473f;
-    --radius:12px;
+    --bg:#ffffff;
+    --bg-tint:#f4f2ec;
+    --panel:#ffffff;
+    --line:#222222;
+    --rule-soft:#e8e4dc;
+    --text:#222222;
+    --muted:#555555;
+    --faint:#9a9a9a;
+    --red:#de1815;
+    --red-d:#a42f1c;
+    --ok:#2f7a4a;
+    --warn:#cc8a3c;
+    --danger:#b04434;
+    --radius:2px;
+    --radius-pill:999px;
+    --font-sans:"IBM Plex Sans JP","Yu Gothic","游ゴシック",YuGothic,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+    --font-en:"Montserrat","IBM Plex Sans JP",sans-serif;
+    --font-num:"Roboto","Montserrat",sans-serif;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;}
   body{
-    font-family:'IBM Plex Sans JP',system-ui,-apple-system,sans-serif;
+    font-family:var(--font-sans);
     background:var(--bg);
     color:var(--text);
-    line-height:1.65;
+    line-height:1.85;
     font-size:15px;
+    letter-spacing:.04em;
     -webkit-font-smoothing:antialiased;
   }
-  .wrap{max-width:640px;margin:0 auto;padding:0 14px env(safe-area-inset-bottom);}
-  a{color:var(--accent);}
+  .wrap{max-width:680px;margin:0 auto;padding:0 16px env(safe-area-inset-bottom);}
+  a{color:var(--red);text-decoration:none;}
+  a:hover{text-decoration:underline;}
 
-  /* ===== ヘッダー ===== */
+  /* ===== ヘッダー（block_logo風：白＋黒罫1px） ===== */
   .topbar{
     position:sticky;top:0;z-index:20;
     background:var(--panel);
     border-bottom:1px solid var(--line);
-    padding:10px 14px;
-    display:flex;align-items:center;gap:10px;
+    padding:14px 18px;
+    display:flex;align-items:center;gap:12px;
   }
-  .topbar .ttl{font-weight:700;font-size:15px;flex:1;min-width:0;}
-  .topbar .me{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:42%;}
+  .topbar .ttl{
+    font-weight:700;font-size:15px;flex:1;min-width:0;
+    letter-spacing:.06em;
+  }
+  .topbar .ttl::before{
+    content:"ADMIN";
+    display:inline-block;
+    font-family:var(--font-en);
+    font-size:10px;font-weight:800;letter-spacing:.22em;
+    color:#fff;background:var(--red);
+    padding:3px 8px;border-radius:var(--radius-pill);
+    margin-right:10px;vertical-align:1px;
+  }
+  .topbar .me{
+    font-size:11px;color:var(--muted);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:42%;
+    font-family:var(--font-num);letter-spacing:.04em;
+  }
 
-  /* ===== ボタン ===== */
+  /* ===== ボタン（公式の丸ピル＋黒枠） ===== */
   .btn{
-    font-family:inherit;font-size:14px;font-weight:600;
-    border:none;border-radius:10px;
-    padding:11px 14px;color:#fff;cursor:pointer;
-    background:var(--accent);transition:opacity .15s,background .15s;
-    line-height:1.3;
+    font-family:var(--font-en);font-size:13px;font-weight:700;letter-spacing:.12em;
+    border:1.5px solid var(--text);border-radius:var(--radius-pill);
+    padding:11px 18px;color:var(--text);cursor:pointer;
+    background:var(--panel);
+    text-transform:uppercase;
+    transition:background .2s,color .2s,border-color .2s;
+    line-height:1.3;min-height:40px;
   }
-  .btn:active{opacity:.8;}
+  .btn:hover{background:var(--text);color:#fff;}
+  .btn:active{transform:scale(.98);}
   .btn:disabled{opacity:.45;cursor:default;}
-  .btn-ok{background:var(--ok);}
-  .btn-danger{background:var(--danger);}
-  .btn-ghost{background:var(--panel-2);color:var(--text);border:1px solid var(--line);}
-  .btn-sm{padding:8px 12px;font-size:13px;}
+  .btn-ok{background:var(--ok);color:#fff;border-color:var(--ok);}
+  .btn-ok:hover{background:#236338;border-color:#236338;}
+  .btn-danger{background:var(--red);color:#fff;border-color:var(--text);}
+  .btn-danger:hover{background:var(--red-d);}
+  .btn-ghost{background:transparent;color:var(--text);border:1px solid var(--text);}
+  .btn-ghost:hover{background:var(--bg-tint);color:var(--text);}
+  .btn-sm{padding:7px 14px;font-size:11px;letter-spacing:.14em;}
   .btn-block{display:block;width:100%;}
 
   /* ===== ログイン ===== */
   .login{padding:40px 0 60px;}
-  .login h1{font-size:20px;margin:0 0 6px;}
-  .login .note{color:var(--muted);font-size:13px;margin:0 0 24px;}
-  .field{margin-bottom:14px;}
-  .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;}
-  .field input{
-    width:100%;font-family:inherit;font-size:16px;
-    background:var(--panel);color:var(--text);
-    border:1px solid var(--line);border-radius:10px;
-    padding:12px;
+  .login h1{
+    font-size:22px;margin:0 0 8px;font-weight:700;letter-spacing:.06em;
   }
-  .field input:focus{outline:none;border-color:var(--accent);}
+  .login h1::before{
+    content:"LOGIN";
+    display:block;
+    font-family:var(--font-en);
+    font-size:11px;font-weight:800;letter-spacing:.24em;
+    color:var(--red);margin-bottom:6px;
+  }
+  .login .note{color:var(--muted);font-size:13px;margin:0 0 28px;letter-spacing:.04em;}
+  .field{margin-bottom:18px;}
+  .field label{
+    display:block;font-size:11px;color:var(--text);margin-bottom:6px;
+    font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+    font-family:var(--font-en);
+  }
+  .field input{
+    width:100%;font-family:var(--font-sans);font-size:16px;
+    background:var(--panel);color:var(--text);
+    border:1px solid var(--text);border-radius:var(--radius);
+    padding:13px 15px;letter-spacing:.04em;
+  }
+  .field input:focus{
+    outline:none;border-color:var(--red);
+    box-shadow:0 0 0 2px rgba(222,24,21,.14);
+  }
   .errbox{
-    background:rgba(211,91,83,.14);
-    border:1px solid var(--danger);
-    color:#f0b4b0;
-    border-radius:10px;padding:10px 12px;font-size:13px;
-    margin-bottom:14px;
+    background:var(--bg-tint);
+    border:none;border-left:3px solid var(--red);
+    color:var(--red-d);font-weight:600;
+    border-radius:0;padding:12px 14px;font-size:13px;
+    margin-bottom:16px;letter-spacing:.04em;
   }
   .infobox{
-    background:var(--panel);border:1px solid var(--line);
-    color:var(--muted);border-radius:10px;padding:14px;font-size:13px;
+    background:var(--bg-tint);border:1px solid var(--text);
+    color:var(--muted);border-radius:var(--radius);padding:14px 16px;font-size:13px;
+    letter-spacing:.04em;
   }
 
   /* ===== タブ ===== */
   .tabs{
-    display:flex;gap:6px;margin:14px 0 4px;
+    display:flex;gap:0;margin:18px 0 6px;
+    border-bottom:1px solid var(--text);
   }
   .tab{
     flex:1;text-align:center;
-    font-family:inherit;font-size:14px;font-weight:600;
-    padding:10px 6px;border-radius:10px;cursor:pointer;
-    background:var(--panel);color:var(--muted);
-    border:1px solid var(--line);
+    font-family:var(--font-en);font-size:12px;font-weight:700;letter-spacing:.14em;
+    padding:12px 6px;border-radius:0;cursor:pointer;
+    background:transparent;color:var(--muted);
+    border:none;text-transform:uppercase;
+    position:relative;transition:color .2s;
+    min-height:44px;
   }
-  .tab.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .tab:hover{color:var(--text);}
+  .tab.active{color:var(--red);}
+  .tab.active::after{
+    content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;
+    background:var(--red);
+  }
   .tab .count{
-    display:inline-block;min-width:18px;font-size:11px;
-    background:rgba(0,0,0,.25);border-radius:9px;padding:0 5px;margin-left:4px;
+    display:inline-block;min-width:20px;font-size:10px;
+    background:var(--red);color:#fff;
+    border-radius:var(--radius-pill);
+    padding:1px 6px;margin-left:6px;font-weight:800;letter-spacing:.06em;
   }
 
-  /* ===== カード ===== */
+  /* ===== カード（公式の編集記事ブロック） ===== */
   .card{
     background:var(--panel);
-    border:1px solid var(--line);
+    border:1px solid var(--text);
     border-radius:var(--radius);
-    padding:14px;margin:12px 0;
+    padding:18px 20px;margin:14px 0;
   }
-  .card .meta{font-size:12px;color:var(--muted);margin-bottom:6px;}
-  .card .target{font-weight:700;font-size:15px;margin-bottom:2px;}
-  .card .ttype{font-size:11px;color:var(--muted);margin-bottom:8px;}
+  .card .meta{
+    font-size:11px;color:var(--muted);margin-bottom:8px;
+    font-family:var(--font-en);letter-spacing:.12em;text-transform:uppercase;
+  }
+  .card .target{
+    font-weight:700;font-size:16px;margin-bottom:3px;letter-spacing:.04em;
+  }
+  .card .ttype{
+    font-family:var(--font-en);font-size:10px;color:var(--red);
+    margin-bottom:10px;letter-spacing:.2em;text-transform:uppercase;font-weight:700;
+  }
   .card .body{
     white-space:pre-wrap;word-break:break-word;
-    font-size:14px;margin:8px 0;
+    font-size:14.5px;margin:10px 0;line-height:1.95;letter-spacing:.04em;
   }
-  .card .author{font-size:12px;color:var(--muted);margin-top:6px;}
+  .card .author{
+    font-size:11.5px;color:var(--muted);margin-top:8px;letter-spacing:.04em;
+  }
   .card .thumb{
-    margin:10px 0;border-radius:10px;overflow:hidden;
-    background:var(--panel-2);
+    margin:12px 0;border-radius:var(--radius);overflow:hidden;
+    background:var(--bg-tint);border:1px solid var(--rule-soft);
   }
   .card .thumb img{display:block;width:100%;height:auto;cursor:zoom-in;}
-  .badges{margin:6px 0;display:flex;flex-wrap:wrap;gap:6px;}
+  .badges{margin:8px 0;display:flex;flex-wrap:wrap;gap:6px;}
   .badge{
-    font-size:11px;font-weight:600;border-radius:7px;padding:3px 8px;
+    font-family:var(--font-en);
+    font-size:9.5px;font-weight:700;border-radius:var(--radius-pill);
+    padding:3px 9px;letter-spacing:.16em;text-transform:uppercase;
   }
-  .badge-warn{background:rgba(224,168,58,.18);color:var(--warn);border:1px solid var(--warn);}
-  .badge-status{background:var(--panel-2);color:var(--muted);border:1px solid var(--line);}
-  .badge-hidden{background:rgba(211,91,83,.18);color:var(--danger);border:1px solid var(--danger);}
-  .badge-pub{background:rgba(63,174,107,.18);color:var(--ok);border:1px solid var(--ok);}
-  .card-actions{display:flex;gap:8px;margin-top:12px;}
+  .badge-warn{background:#fff;color:var(--warn);border:1px solid var(--warn);}
+  .badge-status{background:#fff;color:var(--muted);border:1px solid var(--muted);}
+  .badge-hidden{background:#fff;color:var(--red);border:1px solid var(--red);}
+  .badge-pub{background:#fff;color:var(--ok);border:1px solid var(--ok);}
+  .card-actions{display:flex;gap:8px;margin-top:14px;}
   .card-actions .btn{flex:1;}
 
   .embed{
-    margin-top:10px;border-top:1px dashed var(--line);padding-top:10px;
+    margin-top:12px;border-top:1px dashed var(--text);padding-top:12px;
   }
 
   .empty{
     text-align:center;color:var(--muted);font-size:14px;
-    padding:40px 0;
+    padding:48px 0;letter-spacing:.04em;
+    font-family:"Noto Serif JP","Yu Mincho",serif;font-style:italic;
   }
-  .loading{text-align:center;color:var(--muted);font-size:13px;padding:20px 0;}
+  .loading{
+    text-align:center;color:var(--faint);font-size:13px;padding:24px 0;
+    font-family:"Noto Serif JP","Yu Mincho",serif;font-style:italic;
+  }
 
-  .toolbar{margin:14px 0;}
+  .toolbar{margin:18px 0;}
 
   /* ===== トースト ===== */
   .toast{
     position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);
-    background:#11141a;color:#fff;border:1px solid var(--line);
-    padding:11px 18px;border-radius:24px;font-size:13px;font-weight:600;
+    background:var(--text);color:#fff;border:1px solid var(--text);
+    padding:12px 22px;border-radius:var(--radius-pill);
+    font-size:13px;font-weight:600;letter-spacing:.04em;
     opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;
     z-index:50;max-width:90vw;text-align:center;
   }
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
-  .toast.err{border-color:var(--danger);color:#f0b4b0;}
+  .toast.err{background:var(--red);border-color:var(--red);color:#fff;}
 
   /* ===== 画像ライトボックス ===== */
   .lightbox{
@@ -168,11 +242,12 @@
     z-index:60;padding:16px;
   }
   .lightbox.show{display:flex;}
-  .lightbox img{max-width:100%;max-height:100%;border-radius:8px;}
+  .lightbox img{max-width:100%;max-height:100%;border-radius:var(--radius);}
   .lightbox .close{
-    position:absolute;top:12px;right:14px;
-    background:rgba(255,255,255,.12);color:#fff;border:none;
-    width:40px;height:40px;border-radius:50%;font-size:20px;cursor:pointer;
+    position:absolute;top:14px;right:16px;
+    background:#fff;color:var(--text);border:1px solid var(--text);
+    width:42px;height:42px;border-radius:50%;font-size:20px;cursor:pointer;
+    font-family:var(--font-en);
   }
 
   .hidden{display:none !important;}
@@ -213,25 +288,25 @@
 
   <div class="wrap">
     <div class="tabs">
-      <button id="tab-pending" class="tab active" data-tab="pending">
-        承認待ち<span id="cnt-pending" class="count hidden">0</span>
-      </button>
-      <button id="tab-reports" class="tab" data-tab="reports">
+      <button id="tab-reports" class="tab active" data-tab="reports">
         通報<span id="cnt-reports" class="count hidden">0</span>
       </button>
+      <button id="tab-pending" class="tab" data-tab="pending">
+        承認待ち<span id="cnt-pending" class="count hidden">0</span>
+      </button>
     </div>
 
-    <div id="panel-pending">
-      <div id="list-pending"></div>
-      <div id="more-pending" class="toolbar hidden">
-        <button class="btn btn-ghost btn-block" data-more="pending">もっと見る</button>
-      </div>
-    </div>
-
-    <div id="panel-reports" class="hidden">
+    <div id="panel-reports">
       <div id="list-reports"></div>
       <div id="more-reports" class="toolbar hidden">
         <button class="btn btn-ghost btn-block" data-more="reports">もっと見る</button>
+      </div>
+    </div>
+
+    <div id="panel-pending" class="hidden">
+      <div id="list-pending"></div>
+      <div id="more-pending" class="toolbar hidden">
+        <button class="btn btn-ghost btn-block" data-more="pending">もっと見る</button>
       </div>
     </div>
 

@@ -40,7 +40,7 @@ service cloud.firestore {
         && request.resource.data.name.size() >= 1
         && request.resource.data.name.size() <= 200
         && request.resource.data.body is string
-        && request.resource.data.body.size() >= 15
+        && request.resource.data.body.size() >= 5
         && request.resource.data.body.size() <= 20000
         && request.resource.data.days is list
         && request.resource.data.days.size() >= 1
