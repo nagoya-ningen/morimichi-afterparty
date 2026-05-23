@@ -24,10 +24,10 @@ const $ = (id) => document.getElementById(id);
 const TARGET_LABEL = {
   artist:     'アーティスト',
   shop:       '出店',
-  shop_brand: '出店ブランド',
+  shop_brand: '出店', // 旧データ互換（移行期間中の表示用）
   area:       'エリア',
-  festival:   'フェス全体',
-  staff:      'スタッフ'
+  festival:   '森道市場',
+  staff:      '運営への感謝'
 };
 
 /* 曜日（day）の日本語ラベル */
@@ -230,7 +230,7 @@ function buildPendingCard(post) {
   const flags = Array.isArray(post.clientFlags) ? post.clientFlags : [];
   if (flags.indexOf('ng_soft') !== -1) {
     const badges = el('div', 'badges');
-    badges.appendChild(el('span', 'badge badge-warn', '⚠️ 要注意ワード'));
+    badges.appendChild(el('span', 'badge badge-warn', '要注意ワード'));
     card.appendChild(badges);
   }
 
@@ -241,8 +241,13 @@ function buildPendingCard(post) {
   // 本文
   card.appendChild(el('div', 'body', post.body || ''));
 
-  // 投稿者・曜日・時刻
-  const dayLabel = DAY_LABEL[post.day] || post.day || '';
+  // 投稿者・曜日・時刻（days配列に対応。旧day単一フィールドにもフォールバック）
+  let dayLabel = '';
+  if (Array.isArray(post.days) && post.days.length) {
+    dayLabel = post.days.map(d => DAY_LABEL[d] || d).join('・');
+  } else if (post.day) {
+    dayLabel = DAY_LABEL[post.day] || post.day;
+  }
   const author = el('div', 'author');
   author.textContent =
     `投稿者：${post.name || '名無し'}` +

@@ -95,10 +95,11 @@ function packResult(snap) {
 =================================================================== */
 
 /* ---------- 投稿の作成 ----------
-   fields: { name, day, snsUrl, body, targetType, targetId, targetName,
+   fields: { name, days, snsUrl, body, targetType, targetId, targetName,
              clientFlags, imageUrl, imagePublicId }
    事後モデレーション制：すべての投稿は status='published' で即時公開。
-   不適切なものは通報経由で運営が hidden=true で即時非表示にする。 */
+   不適切なものは通報経由で運営が hidden=true で即時非表示にする。
+   days: 行った曜日の配列（複数選択可） ['d1','d2','d3'] のサブセット。 */
 export async function createPost(fields) {
   const c = await ensureAnon();
   if (!c) throw new Error('not-configured');
@@ -106,10 +107,11 @@ export async function createPost(fields) {
   if (!user) throw new Error('auth-failed');
   const { collection, addDoc, serverTimestamp } = c.fs;
   const hasImage = !!fields.imageUrl;
+  const days = Array.isArray(fields.days) ? fields.days : [];
 
   const ref = await addDoc(collection(c.db, 'posts'), {
     name:          fields.name,
-    day:           fields.day,
+    days:          days,
     snsUrl:        fields.snsUrl || null,
     body:          fields.body,
     targetType:    fields.targetType,

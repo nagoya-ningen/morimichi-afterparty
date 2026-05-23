@@ -19,14 +19,15 @@ import {
   const FESTIVAL = D.FESTIVAL, DATA_SOURCES = D.DATA_SOURCES;
   const ARTISTS = D.ARTISTS, SHOPS = D.SHOPS, AREAS = D.AREAS;
 
-  /* 感想の対象タイプ。pick:true は対象（個別の名前）の選択が必要。 */
+  /* 感想の対象タイプ。pick:true は対象（個別の名前）の選択が必要。
+     iconはCSS側で `.target-tile[data-tt="…"]` を使って細い線画/タイポで描画する。
+     ロジックからは「ラベル」のみを参照する設計とし、JS文字列に絵文字は持たない。 */
   const TARGET_TYPES = [
-    { type: 'artist',     icon: '🎤', label: 'アーティスト', pick: true },
-    { type: 'shop',       icon: '🍜', label: '店舗',         pick: true },
-    { type: 'shop_brand', icon: '🛍️', label: 'ショップ',     pick: true },
-    { type: 'area',       icon: '📍', label: 'エリア',       pick: true },
-    { type: 'festival',   icon: '🎪', label: '森道自体',     pick: false },
-    { type: 'staff',      icon: '🙏', label: '運営への感謝', pick: false }
+    { type: 'artist',     label: 'アーティスト', pick: true },
+    { type: 'shop',       label: '出店',         pick: true },
+    { type: 'area',       label: 'エリア',       pick: true },
+    { type: 'festival',   label: '森道市場',     pick: false },
+    { type: 'staff',      label: '運営への感謝', pick: false }
   ];
   const TT_BY_TYPE = {};
   TARGET_TYPES.forEach(t => TT_BY_TYPE[t.type] = t);
@@ -43,7 +44,7 @@ import {
     night: initNight(),
     feed: { posts: [], lastDoc: null, hasMore: false, loading: false, loaded: false, error: '' },
     form: {
-      name: '', day: '', snsUrl: '', body: '',
+      name: '', days: [], snsUrl: '', body: '',
       targetType: '', targetId: null, targetName: '',
       image: null, imageName: '', imagePreviewUrl: '',
       imageConsent: false, imageBusy: false, imageError: '',
@@ -116,6 +117,14 @@ import {
     const d = FESTIVAL.days.find(x => x.id === id);
     return d ? d.label + ' ' + d.dow : id;
   }
+  /* 投稿の day/days 両対応：配列なら結合して返す（例: "5/22 FRI／5/24 SUN"） */
+  function daysLabel(post) {
+    if (Array.isArray(post.days) && post.days.length) {
+      return post.days.map(dayLabel).join('／');
+    }
+    if (post.day) return dayLabel(post.day);
+    return '';
+  }
   function timeAgo(ts) {
     if (!ts) return '';
     let d;
@@ -144,33 +153,43 @@ import {
       return s;
     } catch (e) { return null; }
   }
-  /* SNS URLのホスト名から表示用の {icon,label} を返す */
+  /* SNS URLのホスト名から表示用の {key,label} を返す。
+     key は CSS の `.post-sns[data-sns="…"]` でアイコン表記を切り替えるために使う。
+     文字列としては英字短縮ラベル（X, IG, TT, TH, YT, FB, NT, LK）に統一し、絵文字は使わない。 */
   function snsMeta(url) {
     let host = '';
     try { host = new URL(url).hostname.toLowerCase().replace(/^www\./, ''); }
-    catch (e) { return { icon: '🔗', label: 'リンク' }; }
+    catch (e) { return { key: 'link', short: 'LK', label: 'リンク' }; }
     if (host === 'x.com' || host === 'twitter.com' || host === 'mobile.twitter.com')
-      return { icon: '𝕏', label: 'X' };
-    if (host === 'instagram.com') return { icon: '📷', label: 'Instagram' };
+      return { key: 'x', short: 'X', label: 'X' };
+    if (host === 'instagram.com')
+      return { key: 'instagram', short: 'IG', label: 'Instagram' };
     if (host === 'tiktok.com' || host === 'vt.tiktok.com')
-      return { icon: '🎵', label: 'TikTok' };
+      return { key: 'tiktok', short: 'TT', label: 'TikTok' };
     if (host === 'threads.net' || host === 'threads.com')
-      return { icon: '@', label: 'Threads' };
+      return { key: 'threads', short: 'TH', label: 'Threads' };
     if (host === 'youtube.com' || host === 'youtu.be' || host === 'm.youtube.com')
-      return { icon: '▶', label: 'YouTube' };
+      return { key: 'youtube', short: 'YT', label: 'YouTube' };
     if (host === 'facebook.com' || host === 'fb.com')
-      return { icon: 'f', label: 'Facebook' };
-    if (host === 'note.com') return { icon: '📝', label: 'note' };
-    return { icon: '🔗', label: 'リンク' };
+      return { key: 'facebook', short: 'FB', label: 'Facebook' };
+    if (host === 'note.com')
+      return { key: 'note', short: 'NT', label: 'note' };
+    return { key: 'link', short: 'LK', label: 'リンク' };
   }
 
-  /* ---------- ナイトモード ---------- */
+  /* ---------- ナイトモード ----------
+     ボタンの表記は文字（"夜" / "朝"）。アイコン的な見せ方はCSS側で整える。 */
   function applyNight() {
     document.body.classList.toggle('night', state.night);
     const b = $('#nightBtn');
-    if (b) b.textContent = state.night ? '☀️' : '🌙';
+    if (b) {
+      const lbl = b.querySelector('[data-night-label]') || b;
+      lbl.textContent = state.night ? '朝' : '夜';
+      b.setAttribute('aria-pressed', state.night ? 'true' : 'false');
+      b.setAttribute('aria-label', state.night ? '昼の表示に切り替え' : '夜の表示に切り替え');
+    }
     const tc = document.querySelector('meta[name="theme-color"]');
-    if (tc) tc.setAttribute('content', state.night ? '#20232f' : '#fffdf9');
+    if (tc) tc.setAttribute('content', state.night ? '#11131a' : '#fbf6ec');
   }
 
   /* ---------- ビュー切替 ---------- */
@@ -221,7 +240,7 @@ import {
       const e = el('div', 'empty',
         'まだ感想がありません。<br>最初のひとことを残してみませんか。');
       root.appendChild(e);
-      const b = el('button', 'btn btn--primary', '✍️ 感想を書く');
+      const b = el('button', 'btn btn--primary', '感想を残す');
       b.style.margin = '12px auto 0';
       b.style.display = 'block';
       b.onclick = () => switchView('post');
@@ -239,9 +258,12 @@ import {
   }
 
   function postCard(p) {
-    const tt = TT_BY_TYPE[p.targetType] || { icon: '•', label: '' };
+    const tt = TT_BY_TYPE[p.targetType] || { label: '' };
     const card = el('div', 'post-card');
-    let html = '<span class="post-target">' + tt.icon +
+    /* 対象ラベル：「種別 ／ 対象名」を文字のみで構成。視覚的な区切りはCSS側 */
+    const targetKind = tt.label ? tt.label : '';
+    let html = '<span class="post-target" data-tt="' + esc(p.targetType || '') + '">' +
+      (targetKind ? '<span class="pt-kind">' + esc(targetKind) + '</span>' : '') +
       '<span class="pt-name">' + esc(p.targetName || tt.label) + '</span></span>';
     html += '<div class="post-body">' + esc(p.body) + '</div>';
     card.innerHTML = html;
@@ -257,19 +279,20 @@ import {
 
     let meta = '<div class="post-meta">' +
       '<span class="post-name">' + esc(p.name) + '</span>' +
-      '<span class="post-day">' + esc(dayLabel(p.day)) + '</span>';
+      '<span class="post-day">' + esc(daysLabel(p)) + '</span>';
     if (p.snsUrl) {
       const sm = snsMeta(p.snsUrl);
-      meta += '<a class="post-sns" href="' + esc(p.snsUrl) +
-        '" target="_blank" rel="noopener">' +
-        '<span class="post-sns__ico">' + esc(sm.icon) + '</span>' +
-        esc(sm.label) + '</a>';
+      meta += '<a class="post-sns" data-sns="' + esc(sm.key) + '" href="' +
+        esc(p.snsUrl) + '" target="_blank" rel="noopener">' +
+        '<span class="post-sns__ico" aria-hidden="true">' + esc(sm.short) + '</span>' +
+        '<span class="post-sns__lbl">' + esc(sm.label) + '</span></a>';
     }
     meta += '<span class="post-time">' + esc(timeAgo(p.createdAt)) + '</span>';
     meta += '</div>';
     card.appendChild(el('div', '', meta).firstChild);
 
-    const rep = el('button', 'post-report', '⚐ 通報');
+    const rep = el('button', 'post-report', '運営に知らせる');
+    rep.setAttribute('aria-label', 'この投稿を運営に通報する');
     rep.style.marginTop = '8px';
     rep.onclick = () => openReport(p.id);
     card.appendChild(rep);
@@ -331,15 +354,21 @@ import {
       '" placeholder="ニックネームでOK" value="' + esc(fm.name) + '">',
       'ニックネームで構いません。本名でなくて大丈夫です。'));
 
-    /* 曜日 */
+    /* 曜日（複数選択可） */
     const dayBox = el('div', 'day-pick');
     FESTIVAL.days.forEach(d => {
-      const lab = el('label', fm.day === d.id ? 'sel' : '',
+      const lab = el('label', fm.days.indexOf(d.id) >= 0 ? 'sel' : '',
         '<b class="en">' + d.label + '</b><span>' + d.dow + '</span>');
-      lab.onclick = () => { fm.day = d.id; renderPost(); };
+      lab.onclick = () => {
+        const idx = fm.days.indexOf(d.id);
+        if (idx >= 0) fm.days.splice(idx, 1);
+        else fm.days.push(d.id);
+        renderPost();
+      };
       dayBox.appendChild(lab);
     });
-    const dayField = fieldWrap('行った曜日', true, '', '');
+    const dayField = fieldWrap('行った曜日', true, '',
+      '行った日をすべて選んでください（複数選択可）。');
     dayField.querySelector('.field__body').appendChild(dayBox);
     form.appendChild(dayField);
 
@@ -349,11 +378,15 @@ import {
       esc(fm.snsUrl) + '">',
       '投稿するとフィードにSNSリンクとして表示されます。不要なら空欄で。'));
 
-    /* 対象タイプ */
+    /* 対象タイプ — アイコンは廃止し、ラベル（文字）のみで構成。
+       選択状態のときだけ、CSSで上端にヘアラインを引いて誌面のチェック印に。 */
     const tgrid = el('div', 'target-grid');
     TARGET_TYPES.forEach(t => {
-      const tile = el('button', 'target-tile' + (fm.targetType === t.type ? ' sel' : ''),
-        '<span class="ti">' + t.icon + '</span><span class="tl">' + esc(t.label) + '</span>');
+      const tile = el('button',
+        'target-tile' + (fm.targetType === t.type ? ' sel' : ''),
+        '<span class="tl">' + esc(t.label) + '</span>');
+      tile.setAttribute('data-tt', t.type);
+      tile.setAttribute('aria-pressed', fm.targetType === t.type ? 'true' : 'false');
       tile.onclick = () => {
         fm.targetType = t.type;
         fm.targetId = null;
@@ -418,8 +451,8 @@ import {
         imgBox.appendChild(el('div', 'image-busy', '画像を処理しています…'));
       } else {
         const pick = el('label', 'image-pick',
-          '<span class="image-pick__ico">＋</span>' +
-          '<span class="image-pick__txt">写真を選ぶ</span>');
+          '<span class="image-pick__ico" aria-hidden="true">＋</span>' +
+          '<span class="image-pick__txt">写真を添える</span>');
         pick.appendChild(el('input', 'image-input', ''));
         const fileI = pick.querySelector('.image-input');
         fileI.type = 'file';
@@ -543,11 +576,10 @@ import {
     if (tt === 'artist') {
       items = ARTISTS.map(a => ({ id: a.id, name: a.name, sub: '' }));
     } else if (tt === 'shop') {
-      items = SHOPS.filter(s => s.targetType === 'shop')
-        .map(s => ({ id: s.id, name: s.name, sub: s.catLabel + '・' + s.zoneName }));
-    } else if (tt === 'shop_brand') {
-      items = SHOPS.filter(s => s.targetType === 'shop_brand')
-        .map(s => ({ id: s.id, name: s.name, sub: s.catLabel + '・' + s.zoneName }));
+      /* すべての出店（旧 shop / shop_brand を統合） */
+      items = SHOPS.map(s => ({
+        id: s.id, name: s.name, sub: s.catLabel + '・' + s.zoneName
+      }));
     } else if (tt === 'area') {
       items = AREAS.map(a => ({ id: a.id, name: a.name, sub: '' }));
     } else { return; }
@@ -574,9 +606,9 @@ import {
       }
       hit.forEach(it => {
         const row = el('button', 'result-row',
-          '<span class="rr-ico">' + TT_BY_TYPE[tt].icon + '</span>' +
           '<span class="rr-main"><span class="rr-name">' + esc(it.name) + '</span>' +
-          (it.sub ? '<span class="rr-sub">' + esc(it.sub) + '</span>' : '') + '</span>');
+          (it.sub ? '<span class="rr-sub">' + esc(it.sub) + '</span>' : '') + '</span>' +
+          '<span class="rr-chev" aria-hidden="true">›</span>');
         row.onclick = () => {
           state.form.targetId = it.id;
           state.form.targetName = it.name;
@@ -597,7 +629,7 @@ import {
     const name = fm.name.trim();
     if (!name) err.push('名前を入力してください');
     else if (chars(name) > NAME_MAX) err.push('名前は' + NAME_MAX + '文字以内にしてください');
-    if (!fm.day) err.push('行った曜日を選んでください');
+    if (!fm.days.length) err.push('行った曜日を選んでください（複数選択可）');
     if (!fm.targetType) err.push('感想の対象を選んでください');
     else if (TT_BY_TYPE[fm.targetType].pick && !fm.targetId)
       err.push(TT_BY_TYPE[fm.targetType].label + 'を選択してください');
@@ -667,7 +699,7 @@ import {
       const tt = TT_BY_TYPE[fm.targetType];
       await createPost({
         name: name,
-        day: fm.day,
+        days: fm.days.slice(),
         snsUrl: normSnsUrl(fm.snsUrl),
         body: body,
         targetType: fm.targetType,
@@ -682,7 +714,7 @@ import {
       /* フォームをリセット（画像系stateも解放） */
       clearFormImage();
       state.form = {
-        name: name, day: '', snsUrl: '', body: '',
+        name: name, days: [], snsUrl: '', body: '',
         targetType: '', targetId: null, targetName: '',
         image: null, imageName: '', imagePreviewUrl: '',
         imageConsent: false, imageBusy: false, imageError: '',
@@ -702,10 +734,9 @@ import {
      さがす
   ============================================================ */
   const SEARCH_KINDS = [
-    { kind: 'artist',     label: 'アーティスト' },
-    { kind: 'shop',       label: '店舗' },
-    { kind: 'shop_brand', label: 'ショップ' },
-    { kind: 'area',       label: 'エリア' }
+    { kind: 'artist', label: 'アーティスト' },
+    { kind: 'shop',   label: '出店' },
+    { kind: 'area',   label: 'エリア' }
   ];
 
   function renderSearch() {
@@ -768,13 +799,11 @@ import {
       list.appendChild(el('div', 'empty', '該当する対象がありません'));
       return;
     }
-    const icon = (TT_BY_TYPE[kind] || { icon: '•' }).icon;
     hit.forEach(it => {
       const row = el('button', 'result-row',
-        '<span class="rr-ico">' + icon + '</span>' +
         '<span class="rr-main"><span class="rr-name">' + esc(it.name) + '</span>' +
         (it.sub ? '<span class="rr-sub">' + esc(it.sub) + '</span>' : '') + '</span>' +
-        '<span class="rr-count">感想を見る ›</span>');
+        '<span class="rr-count">感想を読む<span class="rr-chev" aria-hidden="true">›</span></span>');
       row.onclick = () => openTargetPosts(kind, it.id, it.name);
       list.appendChild(row);
     });
@@ -833,7 +862,7 @@ import {
         if (!res.posts.length) {
           box.appendChild(el('div', 'empty',
             'まだ感想がありません。<br>最初の感想を書いてみませんか。'));
-          const b = el('button', 'btn btn--primary', '✍️ この対象の感想を書く');
+          const b = el('button', 'btn btn--primary', 'この対象の感想を残す');
           b.style.margin = '12px auto 0';
           b.style.display = 'block';
           b.onclick = () => {
@@ -896,7 +925,7 @@ import {
       '・誹謗中傷にあたる表現が含まれる投稿はできません。<br>' +
       '・事実に基づかない断定的な中傷や、営業妨害にあたる表現は投稿できません。<br>' +
       '・投稿の編集・削除はできません。書く前に内容を確認してください。<br>' +
-      '・不適切な投稿を見つけたら、各投稿の「⚐ 通報」から知らせてください。' +
+      '・不適切な投稿を見つけたら、各投稿の「運営に知らせる」から通報してください。' +
       '運営が確認し、必要に応じて非表示にします。' +
       '</p>'));
 
@@ -921,7 +950,8 @@ import {
     ['artists', 'shops', 'zones'].forEach(k => {
       const s = DATA_SOURCES[k];
       if (!s) return;
-      sh += '<p class="field__hint" style="margin-top:8px">▶ ' + esc(s.name) +
+      sh += '<p class="field__hint source-item">' +
+        '<span class="source-marker" aria-hidden="true"></span>' + esc(s.name) +
         '<br><a href="' + esc(s.url) + '" target="_blank" rel="noopener">' +
         esc(s.url) + '</a><br>取得日：' + esc(s.retrieved) + '</p>';
     });

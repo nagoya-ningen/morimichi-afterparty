@@ -9,8 +9,8 @@
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#f6f1e9",
-  "theme_color": "#e8694a",
+  "background_color": "#f4ede1",
+  "theme_color": "#d6593a",
   "categories": ["events", "music", "social"],
   "icons": [
     { "src": "img/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },

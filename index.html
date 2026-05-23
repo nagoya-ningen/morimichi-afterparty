@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>森道 After party — 感想を残す</title>
 <meta name="description" content="森、道、市場2026の感想・思い出を残して共有する、非公式のファンアプリ。">
-<meta name="theme-color" content="#fffdf9">
+<meta name="theme-color" content="#fbf6ec">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="森道After">
@@ -29,7 +29,9 @@
       <span class="unofficial-tag">非公式ファンアプリ</span>
     </div>
     <div class="app-header__right">
-      <button class="icon-btn" id="nightBtn" aria-label="表示モード切替">🌙</button>
+      <button class="icon-btn" id="nightBtn" aria-label="表示モード切替" aria-pressed="false">
+        <span class="icon-btn__txt" data-night-label></span>
+      </button>
     </div>
   </div>
 </header>
@@ -45,11 +47,11 @@
   <div class="modal" id="modalBody" role="dialog" aria-modal="true" aria-label="詳細"></div>
 </div>
 
-<nav class="tabbar">
-  <button data-view="feed"><span class="ico">🏠</span><span class="lbl">フィード</span></button>
-  <button data-view="post"><span class="ico">✍️</span><span class="lbl">投稿</span></button>
-  <button data-view="search"><span class="ico">🔍</span><span class="lbl">さがす</span></button>
-  <button data-view="about"><span class="ico">ℹ️</span><span class="lbl">について</span></button>
+<nav class="tabbar" aria-label="メインナビゲーション">
+  <button data-view="feed"><span class="ico" aria-hidden="true"></span><span class="lbl">フィード</span></button>
+  <button data-view="post"><span class="ico" aria-hidden="true"></span><span class="lbl">書く</span></button>
+  <button data-view="search"><span class="ico" aria-hidden="true"></span><span class="lbl">さがす</span></button>
+  <button data-view="about"><span class="ico" aria-hidden="true"></span><span class="lbl">情報</span></button>
 </nav>
 
 <!-- データ・辞書（グローバル定義） -->

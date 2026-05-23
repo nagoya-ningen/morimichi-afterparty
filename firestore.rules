@@ -42,9 +42,12 @@ service cloud.firestore {
         && request.resource.data.body is string
         && request.resource.data.body.size() >= 15
         && request.resource.data.body.size() <= 20000
-        && request.resource.data.day in ['d1', 'd2', 'd3']
+        && request.resource.data.days is list
+        && request.resource.data.days.size() >= 1
+        && request.resource.data.days.size() <= 3
+        && request.resource.data.days.hasOnly(['d1', 'd2', 'd3'])
         && request.resource.data.targetType in
-             ['shop', 'shop_brand', 'area', 'artist', 'festival', 'staff']
+             ['shop', 'area', 'artist', 'festival', 'staff']
         && request.resource.data.targetName is string
         && request.resource.data.targetName.size() <= 200
         && (request.resource.data.snsUrl == null
