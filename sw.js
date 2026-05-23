@@ -2,13 +2,16 @@
    コード（html/css/js）はネットワーク優先＝常に最新を表示。
    アイコン画像はキャッシュ優先。
    Firebase / Google Fonts 等の外部オリジンは素通し（介入しない）。 */
-const CACHE = 'mma-v3';
+const CACHE = 'mma-v4';
 
 /* 起動に最低限必要なファイル。1つでも失敗すると addAll は全体失敗するため
-   個別に add し、失敗してもインストールを止めない。 */
+   個別に add し、失敗してもインストールを止めない。
+   管理画面ファイルもプリキャッシュ対象に含める（古い admin.js が
+   フォールバック返却される事故を防ぐため）。 */
 const CORE = [
   './',
   './index.html',
+  './admin.html',
   './manifest.json',
   './css/style.css',
   './js/data.js',
@@ -16,6 +19,7 @@ const CORE = [
   './js/image.js',
   './js/firebase.js',
   './js/app.js',
+  './js/admin.js',
   './img/icon-192.png',
   './img/icon-512.png'
 ];

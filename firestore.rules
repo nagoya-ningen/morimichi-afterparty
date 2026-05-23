@@ -1,16 +1,18 @@
 rules_version = '2';
 
-/* 森道 After party — Firestore セキュリティルール（画像投稿・事前承認制 対応）
+/* 森道 After party — Firestore セキュリティルール（事後モデレーション制）
 
    方針：
    ・posts の read は「hidden=false かつ status=published」を公開する。
-     承認待ち(pending)は運営と投稿者本人のみ閲覧可。運営は全件閲覧可。
-   ・create はフィールドを検証する。画像つき投稿は status='pending' に強制し、
-     撮影者同意フラグ(imageConsent)を必須にする。
-     テキストのみ投稿は status='published'（従来どおり即時公開）。
-   ・投稿の承認(status)・非表示(hidden)・削除は運営のみ。
+     運営は全件閲覧可。
+   ・create はフィールドを厳密に検証する。すべての投稿は status='published'
+     で即時公開（事後モデレーション）。画像つきも即時公開。
+     不適切な投稿は通報経由で運営が hidden=true で即時非表示にする。
+   ・createdAt はサーバー時刻と一致を強制（クライアントによる時刻偽装を阻止）。
+   ・snsUrl は http(s) のみ許可（javascript: 等のXSS阻止）。
+   ・imageUrl は Cloudinary のドメインのみ許可（任意URL注入の阻止）。
+   ・非表示(hidden)・削除は運営のみ。
    ・運営判定は request.auth.token.email == 管理者メール。
-     管理者は admin.html からメール＋パスワードでログインする。
    ・App Check を有効にすると、これに加えてBotの書き込みが弾かれる。
 
    ▼ セットアップ：adminEmail() を運営者の管理用メールアドレスに置き換える。 */
@@ -18,7 +20,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    /* ▼ ここを運営者の管理用メールアドレスに置き換える（admin.html のログインに使うもの） */
+    /* ▼ ここを運営者の管理用メールアドレスに置き換える */
     function adminEmail() { return 'fff.yusei@gmail.com'; }
     function isAdmin() {
       return request.auth != null
@@ -26,55 +28,51 @@ service cloud.firestore {
     }
 
     match /posts/{postId} {
-      /* 公開: published のみ。pending は運営・投稿者本人のみ。運営は全件可。 */
+      /* 公開: hidden==false かつ status==published。運営は全件可。 */
       allow read: if isAdmin()
-        || (
-          resource.data.hidden == false
-          && (
-            resource.data.status == 'published'
-            || (request.auth != null
-                && resource.data.authorUid == request.auth.uid)
-          )
-        );
+        || (resource.data.hidden == false
+            && resource.data.status == 'published');
 
       allow create: if request.auth != null
         && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.createdAt == request.time
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 1
         && request.resource.data.name.size() <= 200
         && request.resource.data.body is string
-        && request.resource.data.body.size() >= 10
+        && request.resource.data.body.size() >= 15
         && request.resource.data.body.size() <= 20000
         && request.resource.data.day in ['d1', 'd2', 'd3']
         && request.resource.data.targetType in
              ['shop', 'shop_brand', 'area', 'artist', 'festival', 'staff']
         && request.resource.data.targetName is string
+        && request.resource.data.targetName.size() <= 200
         && (request.resource.data.snsUrl == null
             || (request.resource.data.snsUrl is string
-                && request.resource.data.snsUrl.size() <= 300))
+                && request.resource.data.snsUrl.size() <= 300
+                && request.resource.data.snsUrl.matches('^https?://.*')))
         && request.resource.data.hidden == false
         && request.resource.data.reportCount == 0
-        && request.resource.data.status in ['published', 'pending']
+        && request.resource.data.status == 'published'
+        && request.resource.data.clientFlags is list
+        && request.resource.data.clientFlags.size() <= 16
         && (
-          /* テキストのみ：画像なし → 即時公開 */
-          (
-            request.resource.data.imageUrl == null
-            && request.resource.data.status == 'published'
-          )
+          /* テキストのみ */
+          request.resource.data.imageUrl == null
           ||
-          /* 画像つき：承認待ち＋撮影者同意フラグ必須 */
+          /* 画像つき：Cloudinary ドメインのみ許可 */
           (
             request.resource.data.imageUrl is string
             && request.resource.data.imageUrl.size() <= 600
-            && request.resource.data.status == 'pending'
+            && request.resource.data.imageUrl.matches('^https://res\\.cloudinary\\.com/.*')
             && request.resource.data.imageConsent == true
           )
         );
 
-      /* 承認(status)・非表示(hidden)のみ運営が変更可。他フィールドは変更不可。 */
+      /* 非表示(hidden)のみ運営が変更可。他フィールドは変更不可。 */
       allow update: if isAdmin()
         && request.resource.data.diff(resource.data)
-             .affectedKeys().hasOnly(['hidden', 'status']);
+             .affectedKeys().hasOnly(['hidden']);
 
       allow delete: if isAdmin();
     }
@@ -83,7 +81,12 @@ service cloud.firestore {
       /* 通報は作成のみ。閲覧は運営のみ。 */
       allow create: if request.auth != null
         && request.resource.data.reporterUid == request.auth.uid
-        && request.resource.data.postId is string;
+        && request.resource.data.postId is string
+        && request.resource.data.postId.size() <= 64
+        && (request.resource.data.reason == null
+            || (request.resource.data.reason is string
+                && request.resource.data.reason.size() <= 500))
+        && request.resource.data.createdAt == request.time;
       allow read: if isAdmin();
       allow update, delete: if false;
     }

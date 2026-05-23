@@ -97,7 +97,8 @@ function packResult(snap) {
 /* ---------- 投稿の作成 ----------
    fields: { name, day, snsUrl, body, targetType, targetId, targetName,
              clientFlags, imageUrl, imagePublicId }
-   imageUrl があれば status='pending'（事前承認制）、なければ 'published'。 */
+   事後モデレーション制：すべての投稿は status='published' で即時公開。
+   不適切なものは通報経由で運営が hidden=true で即時非表示にする。 */
 export async function createPost(fields) {
   const c = await ensureAnon();
   if (!c) throw new Error('not-configured');
@@ -117,7 +118,7 @@ export async function createPost(fields) {
     imageUrl:      fields.imageUrl || null,
     imagePublicId: fields.imagePublicId || null,
     imageConsent:  hasImage,
-    status:        hasImage ? 'pending' : 'published',
+    status:        'published',
     createdAt:     serverTimestamp(),
     authorUid:     user.uid,
     hidden:        false,

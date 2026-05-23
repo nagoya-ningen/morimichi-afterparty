@@ -31,7 +31,7 @@ import {
   const TT_BY_TYPE = {};
   TARGET_TYPES.forEach(t => TT_BY_TYPE[t.type] = t);
 
-  const BODY_MIN = 30, BODY_MAX = 5000, NAME_MAX = 40;
+  const BODY_MIN = 5, BODY_MAX = 5000, NAME_MAX = 40;
   const COOLDOWN_MS = 30 * 1000;
 
   /* 削除依頼の窓口フォームURL（手動で設定する。READMEを参照） */
@@ -394,7 +394,7 @@ import {
     if (IMAGE_READY) {
       const imgField = fieldWrap('写真', false, '',
         '写真は1枚まで。アップロード前に自動で圧縮し、位置情報（EXIF）を' +
-        '削除します。画像つきの投稿は、運営の確認後に公開されます。');
+        '削除します。不適切な投稿は通報経由で運営が即時非表示にします。');
       const imgBody = imgField.querySelector('.field__body');
       const imgBox = el('div', 'image-field');
 
@@ -447,9 +447,13 @@ import {
       form.appendChild(imgField);
     }
 
+    /* 送信前リマインド：投稿後の編集・削除は不可 */
+    form.appendChild(el('p', 'submit-reminder',
+      '投稿すると <b>編集・削除はできません</b>。送信前に内容をご確認ください。'));
+
     /* 送信 */
     const submit = el('button', 'btn btn--primary btn--block btn--lg',
-      fm.submitting ? '投稿中…' : '感想を投稿する');
+      fm.submitting ? '投稿中…' : 'この感想を残す');
     submit.disabled = fm.submitting;
     submit.onclick = submitPost;
     form.appendChild(submit);
@@ -684,9 +688,7 @@ import {
         imageConsent: false, imageBusy: false, imageError: '',
         errors: [], submitting: false, piiOk: false
       };
-      toast(hasImage
-        ? '画像つきの投稿は、運営の確認後に表示されます。ありがとうございます'
-        : '感想を投稿しました。ありがとうございます');
+      toast('感想をフィードに流しました。ありがとう。');
       loadFeed(true);
       switchView('feed');
     } catch (e) {
@@ -907,7 +909,9 @@ import {
       (takedownHasUrl
         ? '<a href="' + esc(TAKEDOWN_FORM_URL) + '" target="_blank" ' +
           'rel="noopener">削除依頼フォームを開く</a>'
-        : '<span class="takedown-pending">（受付窓口は準備中です）</span>') +
+        : '運営：<a href="https://x.com/nagoya_ningen" target="_blank" ' +
+          'rel="noopener">X（@nagoya_ningen）</a>のDMでお知らせください。' +
+          '対象の投稿URL（または本文の抜粋）と、削除を求める理由をお伝えください。') +
       '</p>'));
 
     root.appendChild(secTitle('データの出典', 'SOURCE'));
