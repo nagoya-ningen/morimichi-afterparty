@@ -847,3 +847,171 @@ body.night .toast{
   .section-title > span:first-child{font-size:24px;}
   .brand-logo{height:44px;}
 }
+
+/* ============================================================
+   v7 — ホーム画面の統合（クイック投稿 ＋ 絞り込み ＋ フィード）
+   ・上端にインラインの簡易投稿カード（Threads型）
+   ・その下に絞り込みチップ（種別＋対象別）
+   ・下に投稿カード一覧
+   設計トーンは既存の "Editorial Festival" を継承し、矩形＋細罫＋赤アクセント。
+============================================================ */
+
+/* ---- クイック投稿カード ---- */
+.qc-card{
+  margin:14px 0 18px;
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:14px 16px;
+  box-shadow:var(--lift-sm);
+  transition:box-shadow .25s ease,padding .25s ease;
+}
+.qc-card--open{
+  padding:16px 16px 14px;
+  box-shadow:var(--lift);
+}
+/* 折りたたみ時のプロンプト：1行で投稿を促す */
+.qc-prompt{
+  display:flex;align-items:center;gap:10px;
+  width:100%;text-align:left;
+  padding:6px 2px;
+  color:var(--ink-soft);
+  font-family:var(--font-sans);font-size:14.5px;letter-spacing:.04em;
+}
+.qc-prompt:hover{color:var(--ink);}
+.qc-prompt__dot{
+  width:8px;height:8px;border-radius:50%;
+  background:var(--red);flex:0 0 8px;
+  box-shadow:0 0 0 3px rgba(222,24,21,.12);
+}
+body.night .qc-prompt__dot{background:var(--red-d);}
+.qc-prompt__txt{flex:1;}
+
+/* 展開時：本文 textarea */
+.qc-body{
+  width:100%;
+  min-height:120px;
+  font-family:var(--font-sans);
+  font-size:15px;line-height:1.85;letter-spacing:.04em;
+  border:1px solid var(--hairline);
+  background:transparent;color:var(--ink);
+  padding:12px 14px;
+  border-radius:var(--radius-sm);
+  resize:vertical;
+}
+.qc-body:focus{outline:none;border-color:var(--line);}
+.qc-body::placeholder{color:var(--ink-faint);}
+
+/* メタ行（対象／曜日／名前） */
+.qc-meta{margin-top:12px;display:flex;flex-direction:column;gap:10px;}
+.qc-meta__row{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+}
+.qc-meta__label{
+  flex:0 0 auto;
+  font-family:var(--font-en);
+  font-size:10.5px;font-weight:700;letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--ink-soft);
+  min-width:54px;
+}
+.qc-chips{flex:1 1 auto;}
+.qc-chips .chip{font-size:12px;padding:5px 10px;}
+.qc-name-wrap{flex:1 1 auto;}
+.qc-name{
+  width:100%;padding:8px 12px;font-size:13.5px;
+}
+
+/* 操作行 */
+.qc-ops{
+  margin-top:14px;
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  border-top:1px solid var(--rule-soft);
+  padding-top:12px;
+}
+.qc-counter{
+  flex:0 0 auto;
+  font-family:var(--font-num);
+  font-size:11.5px;color:var(--ink-faint);letter-spacing:.06em;
+  margin-right:auto;
+}
+.qc-counter.ok{color:var(--ok);font-weight:700;}
+.qc-counter.short{color:var(--ng);}
+.qc-detail{
+  font-family:var(--font-en);font-size:11px;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-soft);
+  padding:6px 0;
+  border-bottom:1px solid transparent;
+}
+.qc-detail:hover{color:var(--red);border-bottom-color:var(--red);}
+.qc-cancel{
+  font-size:12px;padding:7px 12px;
+}
+.qc-submit{
+  font-size:13px;padding:8px 18px;
+}
+
+/* ---- フィードの絞り込みバー ---- */
+.feed-filters{
+  margin:6px 0 14px;
+  display:flex;flex-direction:column;gap:8px;
+  padding-bottom:10px;
+  border-bottom:1px solid var(--rule-soft);
+}
+.feed-filters__kind{display:flex;gap:6px;flex-wrap:wrap;}
+.feed-filters__kind .chip{
+  font-size:12px;padding:5px 11px;
+  border-radius:var(--radius-pill);
+}
+.feed-filters__target{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  font-size:12.5px;
+}
+.feed-filters__pick{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:4px 0;
+  color:var(--ink-soft);
+  border-bottom:1px dashed var(--ink-faint);
+  font-size:12px;letter-spacing:.04em;
+}
+.feed-filters__pick:hover{color:var(--red);border-bottom-color:var(--red);}
+.feed-filters__pick .en{
+  font-family:var(--font-en);font-weight:700;
+  color:var(--red);font-size:12px;
+}
+.feed-filters__pill{
+  display:inline-flex;align-items:baseline;gap:6px;
+  padding:4px 10px;
+  background:var(--bg-tint);
+  border:1px solid var(--hairline);
+  border-radius:var(--radius-pill);
+  font-size:12px;
+}
+.feed-filters__pill .ff-label{
+  font-family:var(--font-en);font-size:10px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--ink-soft);
+}
+.feed-filters__pill .ff-name{font-weight:700;color:var(--ink);}
+.feed-filters__clear{
+  font-size:11.5px;color:var(--ink-soft);
+  text-decoration:underline;text-decoration-color:var(--ink-faint);
+  text-underline-offset:3px;
+  padding:4px 4px;
+}
+.feed-filters__clear:hover{color:var(--red);text-decoration-color:var(--red);}
+
+/* ---- フィードリスト本体 ---- */
+.feed-list{display:flex;flex-direction:column;gap:0;}
+
+/* ---- レスポンシブの微調整 ---- */
+@media (max-width:380px){
+  .qc-card{padding:12px 12px;}
+  .qc-body{min-height:104px;font-size:14.5px;padding:10px 12px;}
+  .qc-meta__label{min-width:48px;font-size:10px;}
+  .qc-chips .chip{font-size:11.5px;padding:4px 9px;}
+}
+@media (min-width:640px){
+  .qc-card{padding:18px 22px 16px;}
+  .qc-body{min-height:140px;font-size:16px;}
+}

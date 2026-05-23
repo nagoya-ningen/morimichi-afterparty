@@ -147,6 +147,34 @@ export async function fetchFeed(cursor) {
   return packResult(snap);
 }
 
+/* ---------- フィードのリアルタイム購読 ----------
+   先頭ページ（FEED_PAGE件）の新着差分を onSnapshot で配信する。
+   投稿直後にホーム画面で即時反映するために使用。
+   戻り値は unsubscribe 関数。 */
+export async function subscribeFeed(onChange, onError) {
+  const c = await ensureAnon();
+  if (!c) return function () {};
+  const { collection, query, where, orderBy, limit, onSnapshot } = c.fs;
+  const q = query(
+    collection(c.db, 'posts'),
+    where('hidden', '==', false),
+    where('status', '==', 'published'),
+    orderBy('createdAt', 'desc'),
+    limit(FEED_PAGE)
+  );
+  return onSnapshot(q, function (snap) {
+    const posts = [];
+    snap.forEach(function (d) { const o = d.data(); o.id = d.id; posts.push(o); });
+    if (onChange) onChange({
+      posts: posts,
+      lastDoc: snap.docs.length ? snap.docs[snap.docs.length - 1] : null,
+      hasMore: snap.docs.length === FEED_PAGE
+    });
+  }, function (err) {
+    if (onError) onError(err);
+  });
+}
+
 /* ---------- 対象別の投稿取得（公開）----------
    order: 'desc'（新着順・既定）/ 'asc'（古い順）
    複合インデックスが必要（README参照）。 */

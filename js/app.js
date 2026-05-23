@@ -4,7 +4,7 @@
 ============================================================ */
 import {
   FIREBASE_READY, createPost, fetchFeed, fetchByTarget,
-  countByTarget, reportPost
+  countByTarget, reportPost, subscribeFeed
 } from './firebase.js';
 import {
   IMAGE_READY, ACCEPTED_TYPES, MAX_SOURCE_BYTES,
@@ -42,7 +42,22 @@ import {
   const state = {
     view: 'feed',
     night: initNight(),
-    feed: { posts: [], lastDoc: null, hasMore: false, loading: false, loaded: false, error: '' },
+    feed: {
+      posts: [], lastDoc: null, hasMore: false,
+      loading: false, loaded: false, error: '',
+      /* 絞り込み：filterType = '' は全件、'artist'|'shop'|'area'|'festival'|'staff'
+         filterTarget = { id, name } を指定すると、その対象に紐づく投稿のみ */
+      filterType: '',
+      filterTarget: null,
+      /* リアルタイム購読中の unsubscribe 関数 */
+      unsub: null
+    },
+    /* ホーム画面のクイック投稿（インライン） */
+    quick: {
+      open: false, submitting: false, body: '', name: '',
+      days: [], targetType: '', targetId: null, targetName: '',
+      errors: []
+    },
     form: {
       name: '', days: [], snsUrl: '', body: '',
       targetType: '', targetId: null, targetName: '', targetMode: 'pick',
@@ -209,13 +224,28 @@ import {
   }
 
   /* ============================================================
-     フィード
+     フィード（ホーム画面の中核）
+     ・上端：簡易投稿カード（インライン展開）
+     ・中段：絞り込みチップ（種別＋対象別）
+     ・下段：投稿カード一覧（リアルタイム反映）
   ============================================================ */
+
+  /* フィードに表示する種別フィルタ（絞り込みチップの並び） */
+  const FEED_FILTERS = [
+    { type: '',         label: 'すべて' },
+    { type: 'artist',   label: 'アーティスト' },
+    { type: 'shop',     label: '出店' },
+    { type: 'area',     label: 'エリア' },
+    { type: 'festival', label: '森道市場' },
+    { type: 'staff',    label: '運営への感謝' }
+  ];
+
   function renderFeed() {
     const root = $('#view-feed');
     root.innerHTML = '';
-    root.appendChild(secTitle('みんなの感想', 'FEED'));
 
+    /* 見出し＋免責（コンパクトに） */
+    root.appendChild(secTitle('みんなの感想', 'FEED'));
     root.appendChild(el('div', 'disclaimer',
       'これは森、道、市場の<b>非公式ファンアプリ</b>です。主催・運営とは関係ありません。' +
       '投稿は参加者が自由に書いたもので、内容の正確性は保証されません。'));
@@ -228,33 +258,195 @@ import {
       return;
     }
 
+    /* ▼ ホーム上端：簡易投稿カード（インライン） */
+    root.appendChild(renderQuickCompose());
+
+    /* ▼ 絞り込みバー（種別チップ＋対象選択） */
+    root.appendChild(renderFeedFilters());
+
+    /* ▼ フィード本体 */
     const f = state.feed;
-    if (f.loading && !f.posts.length) {
-      root.appendChild(el('div', 'loading', '読み込んでいます…'));
-      return;
-    }
-    if (f.error) {
-      root.appendChild(el('div', 'errbox', esc(f.error)));
-    }
-    if (!f.posts.length && f.loaded) {
-      const e = el('div', 'empty',
-        'まだ感想がありません。<br>最初のひとことを残してみませんか。');
-      root.appendChild(e);
-      const b = el('button', 'btn btn--primary', '感想を残す');
-      b.style.margin = '12px auto 0';
-      b.style.display = 'block';
-      b.onclick = () => switchView('post');
-      root.appendChild(b);
-      return;
-    }
-    f.posts.forEach(p => root.appendChild(postCard(p)));
-    if (f.hasMore) {
+    const list = el('div', 'feed-list');
+    list.id = 'feedList';
+    root.appendChild(list);
+
+    drawFeedList();
+
+    if (f.hasMore && !f.filterTarget) {
       const more = el('button', 'btn btn--ghost more-btn',
         f.loading ? '読み込み中…' : 'もっと見る');
+      more.id = 'feedMoreBtn';
       more.disabled = f.loading;
       more.onclick = () => loadFeed(false);
       root.appendChild(more);
     }
+  }
+
+  /* フィード本体の差分描画（チップ切替時にこれだけ呼べる） */
+  function drawFeedList() {
+    const list = $('#feedList');
+    if (!list) return;
+    const f = state.feed;
+    list.innerHTML = '';
+
+    if (f.loading && !f.posts.length) {
+      list.appendChild(el('div', 'loading', '読み込んでいます…'));
+      return;
+    }
+    if (f.error) {
+      list.appendChild(el('div', 'errbox', esc(f.error)));
+    }
+
+    /* クライアント側フィルタ：filterType と filterTarget が両方反映される
+       （filterTarget があるときは別エンドポイントで取得済み。filterType は通常 client filter） */
+    const filtered = f.filterTarget
+      ? f.posts
+      : (f.filterType
+          ? f.posts.filter(p => p.targetType === f.filterType)
+          : f.posts);
+
+    if (!filtered.length && f.loaded) {
+      const what = f.filterTarget
+        ? '「' + f.filterTarget.name + '」'
+        : (f.filterType ? FEED_FILTERS.find(x => x.type === f.filterType).label : '');
+      const msg = what
+        ? what + ' への感想はまだありません。<br>最初の感想を残してみませんか。'
+        : 'まだ感想がありません。<br>最初のひとことを残してみませんか。';
+      list.appendChild(el('div', 'empty', msg));
+      const b = el('button', 'btn btn--primary', '感想を残す');
+      b.style.margin = '12px auto 0';
+      b.style.display = 'block';
+      b.onclick = () => openQuickCompose();
+      list.appendChild(b);
+      return;
+    }
+    filtered.forEach(p => list.appendChild(postCard(p)));
+  }
+
+  /* 絞り込みチップバー：種別＋（対象別） */
+  function renderFeedFilters() {
+    const wrap = el('div', 'feed-filters');
+    /* 種別チップ */
+    const chips = el('div', 'chips feed-filters__kind');
+    FEED_FILTERS.forEach(f => {
+      const c = el('button',
+        'chip' + (state.feed.filterType === f.type && !state.feed.filterTarget ? ' active' : ''),
+        esc(f.label));
+      c.onclick = () => {
+        if (state.feed.filterTarget) {
+          /* 対象別フィルタが効いているときに種別を変えたら、対象別を解除する */
+          state.feed.filterTarget = null;
+          loadFeed(true, { type: f.type, target: null });
+        } else if (state.feed.filterType !== f.type) {
+          state.feed.filterType = f.type;
+          drawFeedList();
+          updateFilterChips();
+        }
+      };
+      chips.appendChild(c);
+    });
+    wrap.appendChild(chips);
+
+    /* 対象別の絞り込み（任意） */
+    const tgtRow = el('div', 'feed-filters__target');
+    if (state.feed.filterTarget) {
+      const pill = el('span', 'feed-filters__pill',
+        '<span class="ff-label">対象：</span>' +
+        '<span class="ff-name">' + esc(state.feed.filterTarget.name) + '</span>');
+      tgtRow.appendChild(pill);
+      const clear = el('button', 'feed-filters__clear', '解除');
+      clear.onclick = () => {
+        state.feed.filterTarget = null;
+        state.feed.filterType = '';
+        loadFeed(true, { type: '', target: null });
+      };
+      tgtRow.appendChild(clear);
+    } else {
+      const pick = el('button', 'feed-filters__pick',
+        '<span class="en">＋</span> 対象で絞る（出店・アーティスト・エリア）');
+      pick.onclick = () => openFeedTargetPicker();
+      tgtRow.appendChild(pick);
+    }
+    wrap.appendChild(tgtRow);
+    return wrap;
+  }
+
+  function updateFilterChips() {
+    /* チップだけ active クラスを差し替え。再レンダリングは避ける */
+    const chips = $$('.feed-filters__kind .chip');
+    chips.forEach((c, i) => {
+      const t = FEED_FILTERS[i].type;
+      c.classList.toggle('active',
+        state.feed.filterType === t && !state.feed.filterTarget);
+    });
+  }
+
+  /* 対象別フィルタのピッカー（種別→対象名で1段目／2段目） */
+  function openFeedTargetPicker() {
+    const wrap = el('div', '');
+    let kind = 'artist';
+    let queryStr = '';
+
+    function draw() {
+      wrap.innerHTML = '';
+      wrap.appendChild(el('div', 'modal__handle', ''));
+      wrap.appendChild(el('div', 'modal__title', '対象で絞り込み'));
+
+      const kinds = [
+        { k: 'artist', label: 'アーティスト' },
+        { k: 'shop',   label: '出店' },
+        { k: 'area',   label: 'エリア' }
+      ];
+      const kindChips = el('div', 'chips');
+      kindChips.style.margin = '8px 0 12px';
+      kinds.forEach(kk => {
+        const c = el('button',
+          'chip' + (kind === kk.k ? ' active' : ''), kk.label);
+        c.onclick = () => { kind = kk.k; queryStr = ''; draw(); };
+        kindChips.appendChild(c);
+      });
+      wrap.appendChild(kindChips);
+
+      const sb = el('div', 'searchbar');
+      sb.style.position = 'static';
+      sb.innerHTML = '<input class="input" id="ffPickQ" placeholder="名前で検索" value="' +
+        esc(queryStr) + '">';
+      wrap.appendChild(sb);
+
+      const list = el('div', 'result-list');
+      wrap.appendChild(list);
+
+      let items;
+      if (kind === 'artist') items = ARTISTS.map(a => ({ id: a.id, name: a.name, sub: '' }));
+      else if (kind === 'shop')  items = SHOPS.map(s => ({ id: s.id, name: s.name, sub: s.catLabel + '・' + s.zoneName }));
+      else items = AREAS.map(a => ({ id: a.id, name: a.name, sub: '' }));
+      items.forEach(it => it.nk = normKey(it.name));
+
+      const nk = normKey(queryStr || '');
+      const hit = (nk ? items.filter(i => i.nk.indexOf(nk) !== -1) : items).slice(0, 60);
+      if (!hit.length) {
+        list.appendChild(el('div', 'empty', '該当なし'));
+      } else {
+        hit.forEach(it => {
+          const row = el('button', 'result-row',
+            '<span class="rr-main"><span class="rr-name">' + esc(it.name) + '</span>' +
+            (it.sub ? '<span class="rr-sub">' + esc(it.sub) + '</span>' : '') + '</span>' +
+            '<span class="rr-chev" aria-hidden="true">›</span>');
+          row.onclick = () => {
+            closeModal();
+            state.feed.filterType = kind;
+            state.feed.filterTarget = { id: it.id, name: it.name };
+            loadFeed(true, { type: kind, target: { id: it.id, name: it.name } });
+          };
+          list.appendChild(row);
+        });
+      }
+
+      const qi = wrap.querySelector('#ffPickQ');
+      if (qi) qi.oninput = debounce(() => { queryStr = qi.value; draw(); }, 120);
+    }
+    draw();
+    openModal(wrap);
   }
 
   function postCard(p) {
@@ -299,16 +491,353 @@ import {
     return card;
   }
 
-  async function loadFeed(reset) {
+  /* ============================================================
+     クイック投稿（ホーム画面のインラインコンポーザー）
+     簡素化方針：
+     ・必須は「本文」のみ。名前未入力時は「名無しの参加者」。
+     ・行った曜日は「指定なし→今日（フェス期間外なら d3）」を自動補完。
+       ※ Firestore Rules は days を 1〜3 件必須にしているので、空配列は不可。
+     ・対象は任意（チップで森道市場／運営／その他＝詳細フォームへ）。
+     ・もっと詳しく書きたいときは「詳しく書く」で従来の /post に遷移。
+  ============================================================ */
+  function renderQuickCompose() {
+    const q = state.quick;
+    const card = el('div', 'qc-card' + (q.open ? ' qc-card--open' : ''));
+
+    if (!q.open) {
+      /* 折りたたみ：プロンプトのみ */
+      const prompt = el('button', 'qc-prompt',
+        '<span class="qc-prompt__dot" aria-hidden="true"></span>' +
+        '<span class="qc-prompt__txt">今日の森道、ひとこと残しませんか</span>');
+      prompt.onclick = () => openQuickCompose();
+      card.appendChild(prompt);
+      return card;
+    }
+
+    /* 展開済み */
+    if (q.errors.length) {
+      card.appendChild(el('div', 'errbox',
+        '<ul><li>' + q.errors.map(esc).join('</li><li>') + '</li></ul>'));
+    }
+
+    /* 本文 */
+    const ta = el('textarea', 'textarea qc-body');
+    ta.id = 'qcBody';
+    ta.maxLength = BODY_MAX;
+    ta.placeholder = '感想を自由に書いてください（30文字以上ですと読み応えが出ます）';
+    ta.value = q.body;
+    ta.oninput = () => { q.body = ta.value; updateQcCounter(); };
+    card.appendChild(ta);
+
+    /* 行：対象チップ＋曜日チップ */
+    const meta = el('div', 'qc-meta');
+
+    /* 対象タイプの素早い選択（最大3つ＋詳しく入力） */
+    const tBox = el('div', 'qc-meta__row');
+    tBox.appendChild(el('span', 'qc-meta__label', '対象'));
+    const tChips = el('div', 'chips qc-chips');
+    [
+      { type: 'festival', label: '森道市場' },
+      { type: 'staff',    label: '運営への感謝' }
+    ].forEach(t => {
+      const c = el('button', 'chip' + (q.targetType === t.type ? ' active' : ''), t.label);
+      c.onclick = () => {
+        q.targetType = t.type; q.targetId = null; q.targetName = t.label;
+        renderFeed();
+      };
+      tChips.appendChild(c);
+    });
+    /* アーティスト・出店・エリアは1タップでピッカーを開く */
+    const pickC = el('button',
+      'chip' + (q.targetType && q.targetType !== 'festival' && q.targetType !== 'staff' ? ' active' : ''),
+      q.targetName && q.targetType !== 'festival' && q.targetType !== 'staff'
+        ? esc(q.targetName)
+        : 'アーティスト・出店・エリアを選ぶ');
+    pickC.onclick = () => openQuickTargetPicker();
+    tChips.appendChild(pickC);
+    tBox.appendChild(tChips);
+    meta.appendChild(tBox);
+
+    /* 曜日 */
+    const dBox = el('div', 'qc-meta__row');
+    dBox.appendChild(el('span', 'qc-meta__label', '行った日'));
+    const dChips = el('div', 'chips qc-chips');
+    FESTIVAL.days.forEach(d => {
+      const c = el('button',
+        'chip' + (q.days.indexOf(d.id) >= 0 ? ' active' : ''),
+        d.label + ' ' + d.dow);
+      c.onclick = () => {
+        const i = q.days.indexOf(d.id);
+        if (i >= 0) q.days.splice(i, 1); else q.days.push(d.id);
+        renderFeed();
+      };
+      dChips.appendChild(c);
+    });
+    dBox.appendChild(dChips);
+    meta.appendChild(dBox);
+
+    /* 名前（任意） */
+    const nBox = el('div', 'qc-meta__row');
+    nBox.appendChild(el('span', 'qc-meta__label', '名前'));
+    const nWrap = el('div', 'qc-name-wrap');
+    const ni = el('input', 'input qc-name');
+    ni.id = 'qcName';
+    ni.maxLength = NAME_MAX;
+    ni.placeholder = '空欄なら「名無しの参加者」';
+    ni.value = q.name;
+    ni.oninput = () => { q.name = ni.value; };
+    nWrap.appendChild(ni);
+    nBox.appendChild(nWrap);
+    meta.appendChild(nBox);
+
+    card.appendChild(meta);
+
+    /* 操作行 */
+    const ops = el('div', 'qc-ops');
+    const counter = el('span', 'qc-counter');
+    counter.id = 'qcCounter';
+    ops.appendChild(counter);
+
+    const detail = el('button', 'qc-detail', '詳しく書く ›');
+    detail.onclick = () => {
+      /* クイック投稿の入力内容を /post に引き継ぐ */
+      state.form.name = q.name;
+      state.form.body = q.body;
+      state.form.days = q.days.slice();
+      state.form.targetType = q.targetType;
+      state.form.targetId = q.targetId;
+      state.form.targetName = q.targetName;
+      state.form.targetMode = (q.targetType === 'festival' || q.targetType === 'staff') ? 'pick' : 'pick';
+      switchView('post');
+    };
+    ops.appendChild(detail);
+
+    const cancel = el('button', 'btn btn--ghost qc-cancel', 'やめる');
+    cancel.onclick = () => closeQuickCompose();
+    ops.appendChild(cancel);
+
+    const submit = el('button', 'btn btn--primary qc-submit',
+      q.submitting ? '投稿中…' : '投稿する');
+    submit.disabled = q.submitting;
+    submit.onclick = submitQuick;
+    ops.appendChild(submit);
+
+    card.appendChild(ops);
+
+    /* counter初期表示 */
+    setTimeout(updateQcCounter, 0);
+    /* 開いたらテキストエリアに自動フォーカス */
+    setTimeout(() => { try { ta.focus(); } catch (e) {} }, 30);
+
+    return card;
+  }
+
+  function updateQcCounter() {
+    const c = $('#qcCounter');
+    if (!c) return;
+    const n = chars(state.quick.body.trim());
+    c.textContent = n + ' 文字';
+    c.className = 'qc-counter ' + (n >= BODY_MIN ? 'ok' : (n > 0 ? 'short' : ''));
+  }
+
+  function openQuickCompose() {
+    state.quick.open = true;
+    state.quick.errors = [];
+    /* 既存フィルタの対象を初期値として引き継ぐと、文脈に沿った投稿になる */
+    if (state.feed.filterTarget && !state.quick.targetType) {
+      state.quick.targetType = state.feed.filterType;
+      state.quick.targetId = state.feed.filterTarget.id;
+      state.quick.targetName = state.feed.filterTarget.name;
+    }
+    renderFeed();
+  }
+  function closeQuickCompose() {
+    state.quick = {
+      open: false, submitting: false, body: '', name: state.quick.name || '',
+      days: [], targetType: '', targetId: null, targetName: '', errors: []
+    };
+    renderFeed();
+  }
+
+  function openQuickTargetPicker() {
+    const wrap = el('div', '');
+    let kind = 'artist';
+    let queryStr = '';
+
+    function draw() {
+      wrap.innerHTML = '';
+      wrap.appendChild(el('div', 'modal__handle', ''));
+      wrap.appendChild(el('div', 'modal__title', '対象を選ぶ'));
+
+      const kinds = [
+        { k: 'artist', label: 'アーティスト' },
+        { k: 'shop',   label: '出店' },
+        { k: 'area',   label: 'エリア' }
+      ];
+      const kindChips = el('div', 'chips');
+      kindChips.style.margin = '8px 0 12px';
+      kinds.forEach(kk => {
+        const c = el('button',
+          'chip' + (kind === kk.k ? ' active' : ''), kk.label);
+        c.onclick = () => { kind = kk.k; queryStr = ''; draw(); };
+        kindChips.appendChild(c);
+      });
+      wrap.appendChild(kindChips);
+
+      const sb = el('div', 'searchbar');
+      sb.style.position = 'static';
+      sb.innerHTML = '<input class="input" id="qcPickQ" placeholder="名前で検索" value="' +
+        esc(queryStr) + '">';
+      wrap.appendChild(sb);
+
+      const list = el('div', 'result-list');
+      wrap.appendChild(list);
+
+      let items;
+      if (kind === 'artist') items = ARTISTS.map(a => ({ id: a.id, name: a.name, sub: '' }));
+      else if (kind === 'shop')  items = SHOPS.map(s => ({ id: s.id, name: s.name, sub: s.catLabel + '・' + s.zoneName }));
+      else items = AREAS.map(a => ({ id: a.id, name: a.name, sub: '' }));
+      items.forEach(it => it.nk = normKey(it.name));
+
+      const nk = normKey(queryStr || '');
+      const hit = (nk ? items.filter(i => i.nk.indexOf(nk) !== -1) : items).slice(0, 60);
+      if (!hit.length) {
+        list.appendChild(el('div', 'empty', '該当なし'));
+      } else {
+        hit.forEach(it => {
+          const row = el('button', 'result-row',
+            '<span class="rr-main"><span class="rr-name">' + esc(it.name) + '</span>' +
+            (it.sub ? '<span class="rr-sub">' + esc(it.sub) + '</span>' : '') + '</span>' +
+            '<span class="rr-chev" aria-hidden="true">›</span>');
+          row.onclick = () => {
+            state.quick.targetType = kind;
+            state.quick.targetId = it.id;
+            state.quick.targetName = it.name;
+            closeModal();
+            renderFeed();
+          };
+          list.appendChild(row);
+        });
+      }
+
+      const qi = wrap.querySelector('#qcPickQ');
+      if (qi) qi.oninput = debounce(() => { queryStr = qi.value; draw(); }, 120);
+    }
+    draw();
+    openModal(wrap);
+  }
+
+  async function submitQuick() {
+    const q = state.quick;
+    if (q.submitting) return;
+
+    const err = [];
+    const body = (q.body || '').trim();
+    if (chars(body) < BODY_MIN) err.push('感想は' + BODY_MIN + '文字以上で入力してください');
+    if (chars(body) > BODY_MAX) err.push('感想は' + BODY_MAX + '文字以内にしてください');
+    /* 名前は任意。空なら「名無しの参加者」 */
+    const name = (q.name || '').trim() || '名無しの参加者';
+    if (chars(name) > NAME_MAX) err.push('名前は' + NAME_MAX + '文字以内にしてください');
+
+    /* 曜日：未選択ならフェス期間中なら今日、期間外なら d3 を補完 */
+    let days = q.days.slice();
+    if (!days.length) {
+      const today = new Date();
+      const ymd = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
+      if      (ymd === 20260522) days = ['d1'];
+      else if (ymd === 20260523) days = ['d2'];
+      else if (ymd === 20260524) days = ['d3'];
+      else days = ['d3'];  /* 期間外は最終日に紐付け（暫定） */
+    }
+
+    /* 対象：未選択なら festival（森道市場全般） */
+    let targetType = q.targetType || 'festival';
+    let targetId   = q.targetId || null;
+    let targetName = (q.targetName || '').trim();
+    if (!targetName) {
+      const tt = TT_BY_TYPE[targetType];
+      targetName = tt ? tt.label : '森道市場';
+    }
+    /* アーティスト・出店・エリアの場合は targetId が必須相当（picker未選択ならエラー） */
+    if ((targetType === 'artist' || targetType === 'shop' || targetType === 'area') && !targetId) {
+      err.push('対象（' + TT_BY_TYPE[targetType].label + '）を選んでください');
+    }
+
+    if (err.length) { q.errors = err; renderFeed(); return; }
+
+    /* 誹謗中傷フィルタ */
+    const ng = ngCheck(name + '\n' + body);
+    if (ng.blocked) {
+      q.errors = ['不適切な表現が含まれている可能性があります。表現を見直してください。'];
+      renderFeed();
+      return;
+    }
+
+    /* 連投クールダウン */
+    const last = load('mma_lastpost', 0);
+    if (Date.now() - last < COOLDOWN_MS) {
+      const wait = Math.ceil((COOLDOWN_MS - (Date.now() - last)) / 1000);
+      toast('投稿の間隔をあけてください（あと約' + wait + '秒）');
+      return;
+    }
+
+    q.submitting = true;
+    q.errors = [];
+    renderFeed();
+
+    try {
+      await createPost({
+        name: name,
+        days: days,
+        snsUrl: null,
+        body: body,
+        targetType: targetType,
+        targetId: targetId,
+        targetName: targetName,
+        imageUrl: null,
+        imagePublicId: null,
+        clientFlags: ng.soft ? ['ng_soft'] : []
+      });
+      save('mma_lastpost', Date.now());
+      state.quick = {
+        open: false, submitting: false, body: '', name: name,
+        days: [], targetType: '', targetId: null, targetName: '', errors: []
+      };
+      toast('感想をフィードに流しました。ありがとう。');
+      /* リアルタイム購読中なら数百ms以内に反映される。明示的にも一度同期 */
+      loadFeed(true);
+    } catch (e) {
+      q.submitting = false;
+      q.errors = ['投稿に失敗しました。通信環境を確認して、もう一度お試しください。'];
+      renderFeed();
+    }
+  }
+
+  /* ============================================================
+     フィードのロード（フィルタ／対象別の切替に対応）
+  ============================================================ */
+  async function loadFeed(reset, opts) {
     if (!FIREBASE_READY) return;
     const f = state.feed;
+    if (opts) {
+      if (typeof opts.type === 'string') f.filterType = opts.type;
+      if (opts.target !== undefined)     f.filterTarget = opts.target;
+    }
     if (f.loading) return;
     f.loading = true;
     f.error = '';
     if (reset) { f.posts = []; f.lastDoc = null; f.hasMore = false; }
     if (state.view === 'feed') renderFeed();
+
     try {
-      const res = await fetchFeed(reset ? null : f.lastDoc);
+      let res;
+      if (f.filterTarget) {
+        /* 対象別フィルタ：サーバ側でクエリして取得 */
+        res = await fetchByTarget(f.filterType, f.filterTarget.id,
+          reset ? null : f.lastDoc, 'desc');
+      } else {
+        res = await fetchFeed(reset ? null : f.lastDoc);
+      }
       f.posts = f.posts.concat(res.posts);
       f.lastDoc = res.lastDoc;
       f.hasMore = res.hasMore;
@@ -319,6 +848,31 @@ import {
     f.loading = false;
     f.loaded = true;
     if (state.view === 'feed') renderFeed();
+    /* 対象別フィルタを外したときはリアルタイム購読を再起動 */
+    if (!f.filterTarget) restartFeedSubscribe();
+  }
+
+  /* リアルタイム購読の起動・停止（filterTarget が無いときだけ起動） */
+  function restartFeedSubscribe() {
+    const f = state.feed;
+    if (f.unsub) { try { f.unsub(); } catch (e) {} f.unsub = null; }
+    if (!FIREBASE_READY) return;
+    if (f.filterTarget) return;  /* 対象別フィルタ時は購読しない */
+    subscribeFeed((res) => {
+      /* 先頭ページのみ差し替える。既に下にスクロールして読み込んだ過去分は維持 */
+      const existing = f.posts.slice(res.posts.length); /* 先頭分を新着で置換 */
+      /* 単純化：先頭ページ分だけは新着優先 */
+      const ids = new Set(res.posts.map(p => p.id));
+      const rest = f.posts.filter(p => !ids.has(p.id));
+      f.posts = res.posts.concat(rest);
+      if (!f.lastDoc) f.lastDoc = res.lastDoc;
+      if (!f.loaded) f.hasMore = res.hasMore;
+      f.loaded = true;
+      f.loading = false;
+      if (state.view === 'feed') drawFeedList();
+    }, (err) => {
+      console.error('feed subscribe failed:', err);
+    }).then((un) => { f.unsub = un; }).catch(() => {});
   }
 
   /* ============================================================
@@ -1130,6 +1684,8 @@ import {
 
     switchView('feed');
     loadFeed(true);
+    /* リアルタイム購読を開始（初回フィードロードと並行） */
+    restartFeedSubscribe();
   }
 
   if (document.readyState === 'loading')
