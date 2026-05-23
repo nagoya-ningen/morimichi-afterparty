@@ -192,6 +192,7 @@ async function loadPending(reset) {
     refreshPendingEmpty();
     moreBox.classList.toggle('hidden', !pendingState.hasMore);
   } catch (err) {
+    console.error('fetchPending failed:', err);
     loadingEl.remove();
     toast('承認待ちの読み込みに失敗しました', true);
   } finally {
