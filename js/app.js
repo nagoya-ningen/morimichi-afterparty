@@ -290,6 +290,7 @@ import {
       f.lastDoc = res.lastDoc;
       f.hasMore = res.hasMore;
     } catch (e) {
+      console.error('feed load failed:', e);
       f.error = 'フィードの読み込みに失敗しました。通信環境を確認してください。';
     }
     f.loading = false;
