@@ -59,6 +59,9 @@ service cloud.firestore {
         && request.resource.data.status == 'published'
         && request.resource.data.clientFlags is list
         && request.resource.data.clientFlags.size() <= 16
+        /* 一般ユーザーは pinned / pinnedAt / reactions を設定不可 */
+        && !(request.resource.data.keys()
+              .hasAny(['pinned', 'pinnedAt', 'reactions']))
         && (
           /* テキストのみ */
           request.resource.data.imageUrl == null
@@ -72,13 +75,65 @@ service cloud.firestore {
           )
         );
 
-      /* 非表示(hidden)のみ運営が変更可。他フィールドは変更不可。 */
-      allow update: if isAdmin()
-        && request.resource.data.diff(resource.data)
-             .affectedKeys().hasOnly(['hidden']);
+      /* 更新ルール：
+         ・運営：hidden / pinned / pinnedAt の変更が可能（reactionsも上書き可）。
+         ・一般ユーザー：reactions フィールド「のみ」の変更を許可。
+           各キーは number で 0 以上、合計差分（4種すべての絶対差分の合計）が
+           1 以下に限定する（連打や一括加算の不正な水増しを抑止）。
+           ※ 厳密な重複防止は localStorage に依存。完全防止は Cloud Functions
+              側で実装することを推奨（本Rulesは差分制約による簡易対策）。 */
+      allow update: if (
+        isAdmin()
+          && request.resource.data.diff(resource.data)
+               .affectedKeys().hasOnly(['hidden', 'pinned', 'pinnedAt', 'reactions'])
+      ) || (
+        request.auth != null
+          && request.resource.data.diff(resource.data)
+               .affectedKeys().hasOnly(['reactions'])
+          && request.resource.data.reactions is map
+          && reactionsValid(request.resource.data.reactions)
+          && reactionsDiffOk(resource.data, request.resource.data)
+      );
 
       allow delete: if isAdmin();
     }
+
+    /* reactions オブジェクトのスキーマ検証：
+       各キーは number で 0 以上。未定義キーは許可しない（4種のみ）。 */
+    function reactionsValid(r) {
+      return r.keys().hasOnly(['wakaru', 'sameba', 'ikitakatta', 'hozon'])
+        && (!('wakaru' in r)     || (r.wakaru     is int && r.wakaru     >= 0))
+        && (!('sameba' in r)     || (r.sameba     is int && r.sameba     >= 0))
+        && (!('ikitakatta' in r) || (r.ikitakatta is int && r.ikitakatta >= 0))
+        && (!('hozon' in r)      || (r.hozon      is int && r.hozon      >= 0));
+    }
+    /* 既存値 → 新値の差分が「ちょうど1つのキーで ±1」であることを検証。
+       resource.data.reactions が存在しない場合は0と見なす。 */
+    function rxVal(m, k) {
+      return ('reactions' in m && m.reactions != null && k in m.reactions)
+        ? m.reactions[k] : 0;
+    }
+    function reactionsDiffOk(oldD, newD) {
+      return (
+        (rxVal(newD, 'wakaru')     - rxVal(oldD, 'wakaru'))     >= -1
+        && (rxVal(newD, 'wakaru')     - rxVal(oldD, 'wakaru'))     <= 1
+        && (rxVal(newD, 'sameba')     - rxVal(oldD, 'sameba'))     >= -1
+        && (rxVal(newD, 'sameba')     - rxVal(oldD, 'sameba'))     <= 1
+        && (rxVal(newD, 'ikitakatta') - rxVal(oldD, 'ikitakatta')) >= -1
+        && (rxVal(newD, 'ikitakatta') - rxVal(oldD, 'ikitakatta')) <= 1
+        && (rxVal(newD, 'hozon')      - rxVal(oldD, 'hozon'))      >= -1
+        && (rxVal(newD, 'hozon')      - rxVal(oldD, 'hozon'))      <= 1
+        /* 合計絶対差分は 1 以下（1リクエスト=1リアクション分のみ） */
+        && (
+          abs(rxVal(newD, 'wakaru')     - rxVal(oldD, 'wakaru'))
+          + abs(rxVal(newD, 'sameba')     - rxVal(oldD, 'sameba'))
+          + abs(rxVal(newD, 'ikitakatta') - rxVal(oldD, 'ikitakatta'))
+          + abs(rxVal(newD, 'hozon')      - rxVal(oldD, 'hozon'))
+        ) <= 1
+      );
+    }
+    /* Rules には abs() がないため自前実装。 */
+    function abs(n) { return n >= 0 ? n : -n; }
 
     match /reports/{reportId} {
       /* 通報は作成のみ。閲覧は運営のみ。 */

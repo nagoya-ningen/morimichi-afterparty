@@ -1015,3 +1015,126 @@ body.night .qc-prompt__dot{background:var(--red-d);}
   .qc-card{padding:18px 22px 16px;}
   .qc-body{min-height:140px;font-size:16px;}
 }
+
+/* ============================================================
+   「今日のひとこと」セクション（ピン留め投稿）
+   ・編集誌の特集枠を意識：上下に二重罫＋ラベル。
+   ・通常フィードと比べ、外枠で囲むことで「選ばれた」感を出す。
+============================================================ */
+.pinned-section{
+  margin:18px 0 22px;
+  padding:14px 14px 4px;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:var(--bg-tint);
+  position:relative;
+}
+.pinned-section::before{
+  /* 上端の夕日ヘアライン（特集の印） */
+  content:"";position:absolute;left:-1px;right:-1px;top:-1px;height:2px;
+  background:var(--sunset);
+}
+.pinned-section__head{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:2px 2px 12px;
+  border-bottom:1px solid var(--rule-soft);
+  margin-bottom:14px;
+}
+.pinned-section__mark{
+  font-size:14px;line-height:1;
+  filter:saturate(0.85);
+}
+.pinned-section__ttl{
+  font-family:var(--font-serif);
+  font-size:14px;font-weight:700;letter-spacing:.06em;
+  color:var(--ink);flex:1;min-width:0;
+}
+.pinned-section__en{
+  font-family:var(--font-en);
+  font-size:10px;font-weight:800;letter-spacing:.22em;
+  color:var(--red);text-transform:uppercase;
+}
+.pinned-section__list{display:flex;flex-direction:column;gap:0;}
+
+/* ピン留め投稿カードの差別化：本文をやや大きく、特集感を出す */
+.post-card--pinned{
+  background:var(--card);
+  margin-bottom:12px;
+}
+.post-card--pinned .post-body{
+  font-size:17px;line-height:2.05;
+}
+.post-card--pinned::before{
+  /* ピン枠内では上端ヘアラインは控えめに（特集枠側に既にあるため） */
+  background:transparent;
+}
+@media (min-width:640px){
+  .pinned-section{padding:18px 20px 6px;}
+  .post-card--pinned .post-body{font-size:18px;}
+}
+
+/* ============================================================
+   共感リアクション（わかる／同じ場所にいた／行きたかった／保存）
+   ・既存のカード境界の中に収め、控えめな矩形ボタンで構成。
+   ・絵文字は装飾扱い。ラベルが主役。
+============================================================ */
+.post-reactions{
+  display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+  margin-top:12px;padding-top:10px;
+  border-top:1px dashed var(--rule-soft);
+}
+.rx-btn{
+  display:inline-flex;align-items:center;gap:5px;
+  font-family:var(--font-sans);
+  font-size:11.5px;font-weight:600;letter-spacing:.04em;
+  color:var(--ink-soft);
+  background:transparent;
+  border:1px solid var(--hairline);
+  border-radius:var(--radius-pill);
+  padding:5px 10px;
+  cursor:pointer;
+  transition:background .15s ease,color .15s ease,border-color .15s ease;
+  line-height:1.3;
+}
+.rx-btn:hover{
+  color:var(--ink);
+  border-color:var(--ink);
+  background:var(--bg-tint);
+}
+.rx-btn--active{
+  color:var(--red);
+  border-color:var(--red);
+  background:rgba(222,24,21,.06);
+  font-weight:700;
+}
+body.night .rx-btn--active{
+  color:var(--red-d);
+  border-color:var(--red-d);
+  background:rgba(232,64,61,.10);
+}
+.rx-btn:focus-visible{
+  outline:2px solid var(--red);outline-offset:2px;
+}
+.rx-emoji{
+  font-size:12px;line-height:1;
+  filter:saturate(.9);
+}
+.rx-lbl{white-space:nowrap;}
+.rx-cnt{
+  font-family:var(--font-num);
+  font-size:11px;font-weight:700;letter-spacing:.04em;
+  color:var(--ink);
+  margin-left:2px;
+}
+.rx-btn--active .rx-cnt{color:var(--red);}
+body.night .rx-btn--active .rx-cnt{color:var(--red-d);}
+.rx-sum{
+  flex:0 0 auto;margin-left:auto;
+  font-family:var(--font-num);
+  font-size:10.5px;color:var(--ink-faint);letter-spacing:.06em;
+  white-space:nowrap;
+}
+@media (max-width:380px){
+  .rx-btn{font-size:11px;padding:4px 8px;gap:4px;}
+  .rx-lbl{font-size:11px;}
+}

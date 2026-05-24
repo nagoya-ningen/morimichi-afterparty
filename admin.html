@@ -294,6 +294,9 @@
       <button id="tab-pending" class="tab" data-tab="pending">
         承認待ち<span id="cnt-pending" class="count hidden">0</span>
       </button>
+      <button id="tab-pinned" class="tab" data-tab="pinned">
+        ピン留め<span id="cnt-pinned" class="count hidden">0</span>
+      </button>
     </div>
 
     <div id="panel-reports">
@@ -307,6 +310,24 @@
       <div id="list-pending"></div>
       <div id="more-pending" class="toolbar hidden">
         <button class="btn btn-ghost btn-block" data-more="pending">もっと見る</button>
+      </div>
+    </div>
+
+    <div id="panel-pinned" class="hidden">
+      <div class="infobox" style="margin:14px 0;">
+        ピン留めされた投稿は、公開ページ上部の「ナゴヤ人間が選んだ今日のひとこと」枠に
+        表示されます。同時にピン留めできるのは最大3件です。4件目をピン留めすると
+        最も古いピンが自動で外れます。
+      </div>
+      <div id="list-pinned-current"></div>
+      <h3 style="margin:24px 0 6px;font-size:13px;letter-spacing:.12em;
+                 text-transform:uppercase;font-family:var(--font-en);
+                 color:var(--muted);font-weight:800;">
+        公開投稿（新着順）
+      </h3>
+      <div id="list-pinned"></div>
+      <div id="more-pinned" class="toolbar hidden">
+        <button class="btn btn-ghost btn-block" data-more="pinned">もっと見る</button>
       </div>
     </div>
 

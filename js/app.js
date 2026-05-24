@@ -4,7 +4,8 @@
 ============================================================ */
 import {
   FIREBASE_READY, createPost, fetchFeed, fetchByTarget,
-  countByTarget, reportPost, subscribeFeed
+  countByTarget, reportPost, subscribeFeed,
+  fetchPinned, subscribePinned, reactToPost
 } from './firebase.js';
 import {
   IMAGE_READY, ACCEPTED_TYPES, MAX_SOURCE_BYTES,
@@ -52,6 +53,12 @@ import {
       /* リアルタイム購読中の unsubscribe 関数 */
       unsub: null
     },
+    /* ピン留め投稿（「今日のひとこと」セクション） */
+    pinned: { posts: [], loaded: false, unsub: null },
+    /* リアクション：ユーザーが押した履歴を localStorage と同期 */
+    reactions: load('mma_reactions', {}),
+    /* 連打防止：postId+key単位で in-flight 中をマーク */
+    reactionInflight: {},
     /* ホーム画面のクイック投稿（インライン） */
     quick: {
       open: false, submitting: false, body: '', name: '',
@@ -230,6 +237,118 @@ import {
      ・下段：投稿カード一覧（リアルタイム反映）
   ============================================================ */
 
+  /* 共感リアクションの定義（4種固定）。
+     emoji は控えめな絵文字。文字ラベルが主役で絵文字はサブ。 */
+  const REACTIONS = [
+    { key: 'wakaru',     label: 'わかる',         emoji: '🫶' },
+    { key: 'sameba',     label: '同じ場所にいた', emoji: '📍' },
+    { key: 'ikitakatta', label: '行きたかった',   emoji: '🎟️' },
+    { key: 'hozon',      label: '保存',           emoji: '🔖' }
+  ];
+  const REACTION_KEYS = REACTIONS.map(r => r.key);
+
+  /* localStorage に押下履歴を保存（postId → [key, ...]） */
+  function getUserReactions(postId) {
+    const r = state.reactions[postId];
+    return Array.isArray(r) ? r : [];
+  }
+  function hasUserReacted(postId, key) {
+    return getUserReactions(postId).indexOf(key) !== -1;
+  }
+  function setUserReacted(postId, key, on) {
+    const cur = getUserReactions(postId).slice();
+    const i = cur.indexOf(key);
+    if (on && i === -1) cur.push(key);
+    if (!on && i !== -1) cur.splice(i, 1);
+    if (cur.length) state.reactions[postId] = cur;
+    else delete state.reactions[postId];
+    save('mma_reactions', state.reactions);
+  }
+  /* ローカルの楽観的更新用：state.feed.posts と state.pinned.posts の
+     該当 post.reactions[key] を ±1 する（undefined ガード） */
+  function bumpLocalReaction(postId, key, delta) {
+    const apply = (p) => {
+      if (!p || p.id !== postId) return;
+      if (!p.reactions || typeof p.reactions !== 'object') p.reactions = {};
+      const v = (typeof p.reactions[key] === 'number') ? p.reactions[key] : 0;
+      p.reactions[key] = Math.max(0, v + delta);
+    };
+    (state.feed.posts || []).forEach(apply);
+    (state.pinned.posts || []).forEach(apply);
+  }
+
+  /* リアクションのバーを生成（postCard から呼ばれる） */
+  function reactionsBar(post) {
+    const wrap = el('div', 'post-reactions');
+    wrap.setAttribute('role', 'group');
+    wrap.setAttribute('aria-label', '共感リアクション');
+    const counts = (post.reactions && typeof post.reactions === 'object')
+      ? post.reactions : {};
+    REACTIONS.forEach(r => {
+      const n = (typeof counts[r.key] === 'number' && counts[r.key] > 0)
+        ? counts[r.key] : 0;
+      const active = hasUserReacted(post.id, r.key);
+      const btn = el('button',
+        'rx-btn' + (active ? ' rx-btn--active' : ''),
+        '<span class="rx-emoji" aria-hidden="true">' + esc(r.emoji) + '</span>' +
+        '<span class="rx-lbl">' + esc(r.label) + '</span>' +
+        (n > 0 ? '<span class="rx-cnt">' + n + '</span>' : ''));
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+      btn.setAttribute('aria-label',
+        r.label + '（' + (active ? '解除' : '反応する') + '・現在 ' + n + ' 件）');
+      btn.onclick = () => onReactionClick(post.id, r.key, btn);
+      wrap.appendChild(btn);
+    });
+    /* 合計件数のサマリ */
+    const total = REACTION_KEYS.reduce((s, k) =>
+      s + (typeof counts[k] === 'number' ? counts[k] : 0), 0);
+    if (total > 0) {
+      const sum = el('span', 'rx-sum', total + '人が反応');
+      wrap.appendChild(sum);
+    }
+    return wrap;
+  }
+
+  /* リアクションのクリック処理（楽観的更新→Firestore 反映→失敗ロールバック） */
+  async function onReactionClick(postId, key, btnEl) {
+    if (!FIREBASE_READY) { toast('接続設定が未完了です'); return; }
+    const inflightKey = postId + ':' + key;
+    if (state.reactionInflight[inflightKey]) return;  /* 連打防止 */
+    state.reactionInflight[inflightKey] = true;
+    const wasActive = hasUserReacted(postId, key);
+    const delta = wasActive ? -1 : 1;
+    /* 楽観的に UI と localStorage を更新 */
+    setUserReacted(postId, key, !wasActive);
+    bumpLocalReaction(postId, key, delta);
+    /* 差分描画：該当カードのリアクションバーだけ作り直す */
+    redrawCardReactions(postId);
+    try {
+      await reactToPost(postId, key, delta);
+    } catch (e) {
+      /* 失敗：ロールバック */
+      setUserReacted(postId, key, wasActive);
+      bumpLocalReaction(postId, key, -delta);
+      redrawCardReactions(postId);
+      toast('リアクションの送信に失敗しました');
+    } finally {
+      delete state.reactionInflight[inflightKey];
+    }
+  }
+
+  /* 該当 postId のカード（フィード／ピン留めの両方）のリアクションバーを再描画 */
+  function redrawCardReactions(postId) {
+    const cards = $$('.post-card[data-post-id="' + postId + '"]');
+    cards.forEach(card => {
+      const p = (state.feed.posts || []).find(x => x.id === postId)
+             || (state.pinned.posts || []).find(x => x.id === postId);
+      if (!p) return;
+      const old = card.querySelector('.post-reactions');
+      const fresh = reactionsBar(p);
+      if (old) old.replaceWith(fresh);
+      else card.appendChild(fresh);
+    });
+  }
+
   /* フィードに表示する種別フィルタ（絞り込みチップの並び） */
   const FEED_FILTERS = [
     { type: '',         label: 'すべて' },
@@ -239,6 +358,41 @@ import {
     { type: 'festival', label: '森道市場' },
     { type: 'staff',    label: '運営への感謝' }
   ];
+
+  /* ============================================================
+     「今日のひとこと」セクション（ピン留め投稿）
+     ・運営が選んだ投稿（最大3件）を、通常フィードとは別デザインで提示
+     ・0件のときはセクションごと出さない（DOM ノイズを減らす）
+  ============================================================ */
+  function renderPinnedSection() {
+    const posts = state.pinned.posts || [];
+    if (!posts.length) return null;
+    const sec = el('section', 'pinned-section');
+    sec.setAttribute('aria-label', 'ナゴヤ人間が選んだ今日のひとこと');
+    const head = el('div', 'pinned-section__head',
+      '<span class="pinned-section__mark" aria-hidden="true">📌</span>' +
+      '<span class="pinned-section__ttl">ナゴヤ人間が選んだ今日のひとこと</span>' +
+      '<span class="pinned-section__en">TODAY’S PICKS</span>');
+    sec.appendChild(head);
+    const list = el('div', 'pinned-section__list');
+    posts.forEach(p => list.appendChild(postCard(p, { pinned: true })));
+    sec.appendChild(list);
+    return sec;
+  }
+
+  /* ピン留め投稿のリアルタイム購読 */
+  function restartPinnedSubscribe() {
+    const pn = state.pinned;
+    if (pn.unsub) { try { pn.unsub(); } catch (e) {} pn.unsub = null; }
+    if (!FIREBASE_READY) return;
+    subscribePinned((posts) => {
+      pn.posts = posts || [];
+      pn.loaded = true;
+      if (state.view === 'feed') renderFeed();
+    }, (err) => {
+      console.error('pinned subscribe failed:', err);
+    }).then((un) => { pn.unsub = un; }).catch(() => {});
+  }
 
   function renderFeed() {
     const root = $('#view-feed');
@@ -260,6 +414,10 @@ import {
 
     /* ▼ ホーム上端：簡易投稿カード（インライン） */
     root.appendChild(renderQuickCompose());
+
+    /* ▼ 「今日のひとこと」セクション（ピン留め投稿。0件のときは非表示） */
+    const pinSec = renderPinnedSection();
+    if (pinSec) root.appendChild(pinSec);
 
     /* ▼ 絞り込みバー（種別チップ＋対象選択） */
     root.appendChild(renderFeedFilters());
@@ -449,9 +607,11 @@ import {
     openModal(wrap);
   }
 
-  function postCard(p) {
+  function postCard(p, opts) {
     const tt = TT_BY_TYPE[p.targetType] || { label: '' };
-    const card = el('div', 'post-card');
+    const isPinned = !!(opts && opts.pinned);
+    const card = el('div', 'post-card' + (isPinned ? ' post-card--pinned' : ''));
+    if (p && p.id) card.setAttribute('data-post-id', p.id);
     /* 対象ラベル：「種別 ／ 対象名」を文字のみで構成。視覚的な区切りはCSS側 */
     const targetKind = tt.label ? tt.label : '';
     let html = '<span class="post-target" data-tt="' + esc(p.targetType || '') + '">' +
@@ -482,6 +642,9 @@ import {
     meta += '<span class="post-time">' + esc(timeAgo(p.createdAt)) + '</span>';
     meta += '</div>';
     card.appendChild(el('div', '', meta).firstChild);
+
+    /* 共感リアクション（4種・タップで±1） */
+    card.appendChild(reactionsBar(p));
 
     const rep = el('button', 'post-report', '運営に知らせる');
     rep.setAttribute('aria-label', 'この投稿を運営に通報する');
@@ -1686,6 +1849,8 @@ import {
     loadFeed(true);
     /* リアルタイム購読を開始（初回フィードロードと並行） */
     restartFeedSubscribe();
+    /* ピン留め投稿の購読も開始 */
+    restartPinnedSubscribe();
   }
 
   if (document.readyState === 'loading')

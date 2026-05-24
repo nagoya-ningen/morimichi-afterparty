@@ -14,8 +14,13 @@ import {
   approvePost,
   hidePost,
   unhidePost,
-  fetchAllPostsForExport
+  fetchAllPostsForExport,
+  fetchPublishedForAdmin,
+  fetchPinnedForAdmin,
+  setPostPinned
 } from './firebase.js';
+
+const MAX_PINS = 3;
 
 /* ---------- 短縮ヘルパ ---------- */
 const $ = (id) => document.getElementById(id);
@@ -490,6 +495,148 @@ function renderEmbeddedPost(container, post) {
 }
 
 /* ===================================================================
+   ピン留めタブ
+=================================================================== */
+const pinnedState = {
+  cursor: null, hasMore: false, loading: false, started: false,
+  pinnedIds: new Set()
+};
+
+async function loadPinned(reset) {
+  if (pinnedState.loading) return;
+  pinnedState.loading = true;
+
+  const list = $('list-pinned');
+  const cur = $('list-pinned-current');
+  const moreBox = $('more-pinned');
+  const moreBtn = moreBox.querySelector('button');
+
+  if (reset) {
+    list.innerHTML = '';
+    cur.innerHTML = '';
+    pinnedState.cursor = null;
+    pinnedState.hasMore = false;
+    pinnedState.pinnedIds = new Set();
+  }
+  if (moreBtn) moreBtn.disabled = true;
+
+  const loadingEl = el('div', 'loading', '読み込み中…');
+  list.appendChild(loadingEl);
+
+  try {
+    /* 現在ピン留め中の投稿を上部に固めて表示 */
+    if (reset) {
+      const pins = await fetchPinnedForAdmin();
+      pinnedState.pinnedIds = new Set(pins.map(p => p.id));
+      if (pins.length) {
+        const head = el('div', 'pinned-head',
+          `現在ピン留め中：${pins.length} / ${MAX_PINS}`);
+        head.style.cssText =
+          'font-family:var(--font-en);font-size:11px;letter-spacing:.14em;' +
+          'text-transform:uppercase;color:var(--muted);font-weight:700;margin:8px 0 6px;';
+        cur.appendChild(head);
+        pins.forEach(p => cur.appendChild(buildPinnableCard(p)));
+      } else {
+        const empty = el('div', 'empty', '現在ピン留めされている投稿はありません。');
+        empty.style.padding = '20px 0';
+        cur.appendChild(empty);
+      }
+    }
+
+    /* 公開投稿の一覧（ピン留め候補） */
+    const res = await fetchPublishedForAdmin(pinnedState.cursor);
+    loadingEl.remove();
+    const posts = (res && res.posts) || [];
+    posts.forEach((post) => {
+      /* 既にピン留め済みのものは「現在ピン留め中」セクションに出ているので、ここでは出さない */
+      if (pinnedState.pinnedIds.has(post.id)) return;
+      list.appendChild(buildPinnableCard(post));
+    });
+
+    pinnedState.cursor = (res && res.lastDoc) || null;
+    pinnedState.hasMore = !!(res && res.hasMore);
+    pinnedState.started = true;
+
+    moreBox.classList.toggle('hidden', !pinnedState.hasMore);
+    updateCounts();
+  } catch (err) {
+    console.error('loadPinned failed:', err);
+    loadingEl.remove();
+    toast('公開投稿の読み込みに失敗しました', true);
+  } finally {
+    if (moreBtn) moreBtn.disabled = false;
+    pinnedState.loading = false;
+  }
+}
+
+/* ピン留め切り替えボタン付きのカード */
+function buildPinnableCard(post) {
+  const card = el('div', 'card');
+  card.dataset.postId = post.id;
+
+  card.appendChild(el('div', 'target', post.targetName || '（対象名なし）'));
+  const typeLabel = TARGET_LABEL[post.targetType] || post.targetType || '種別不明';
+  card.appendChild(el('div', 'ttype', typeLabel));
+
+  /* 状態バッジ */
+  const badges = el('div', 'badges');
+  if (post.pinned) {
+    badges.appendChild(el('span', 'badge badge-pub', 'ピン留め中'));
+  }
+  if (post.hidden) {
+    badges.appendChild(el('span', 'badge badge-hidden', '非表示中'));
+  }
+  if (badges.children.length) card.appendChild(badges);
+
+  const thumb = buildThumb(post.imageUrl);
+  if (thumb) card.appendChild(thumb);
+
+  card.appendChild(el('div', 'body', post.body || ''));
+
+  let dayLabel = '';
+  if (Array.isArray(post.days) && post.days.length) {
+    dayLabel = post.days.map(d => DAY_LABEL[d] || d).join('・');
+  } else if (post.day) {
+    dayLabel = DAY_LABEL[post.day] || post.day;
+  }
+  const author = el('div', 'author');
+  author.textContent =
+    `投稿者：${post.name || '名無し'}` +
+    (dayLabel ? `／${dayLabel}` : '') +
+    `／${formatDate(post.createdAt)}`;
+  card.appendChild(author);
+
+  /* ピン留め / 解除ボタン */
+  const actions = el('div', 'card-actions');
+  const isPinned = !!post.pinned;
+  const pinBtn = el('button',
+    'btn btn-sm ' + (isPinned ? 'btn-danger' : 'btn-ok'),
+    isPinned ? '📌 ピン留めを解除' : '📌 ピン留め');
+  pinBtn.setAttribute('aria-label',
+    isPinned ? 'この投稿のピン留めを解除する' : 'この投稿をピン留めする');
+  pinBtn.addEventListener('click', async () => {
+    pinBtn.disabled = true;
+    const original = pinBtn.textContent;
+    pinBtn.textContent = isPinned ? '解除中…' : 'ピン留め中…';
+    try {
+      await setPostPinned(post.id, !isPinned);
+      toast(isPinned ? 'ピン留めを解除しました' : 'ピン留めしました');
+      /* 状態をリロードして反映 */
+      loadPinned(true);
+    } catch (err) {
+      console.error('setPostPinned failed:', err);
+      toast(isPinned ? '解除に失敗しました' : 'ピン留めに失敗しました', true);
+      pinBtn.disabled = false;
+      pinBtn.textContent = original;
+    }
+  });
+  actions.appendChild(pinBtn);
+  card.appendChild(actions);
+
+  return card;
+}
+
+/* ===================================================================
    タブ切り替え
 =================================================================== */
 function initTabs() {
@@ -505,19 +652,23 @@ function switchTab(name) {
   });
   $('panel-pending').classList.toggle('hidden', name !== 'pending');
   $('panel-reports').classList.toggle('hidden', name !== 'reports');
+  $('panel-pinned').classList.toggle('hidden', name !== 'pinned');
 
   // 初回表示時にロード
   if (name === 'pending' && !pendingState.started) loadPending(true);
   if (name === 'reports' && !reportState.started) loadReports(true);
+  if (name === 'pinned' && !pinnedState.started) loadPinned(true);
 }
 
 /* タブのカウントバッジを更新（現在描画中のカード数を表示） */
 function updateCounts() {
   const pCount = $('list-pending').querySelectorAll('.card').length;
   const rCount = $('list-reports').querySelectorAll('.card').length;
+  const pinCount = pinnedState.pinnedIds ? pinnedState.pinnedIds.size : 0;
 
   const pBadge = $('cnt-pending');
   const rBadge = $('cnt-reports');
+  const pinBadge = $('cnt-pinned');
 
   if (pendingState.started && pCount > 0) {
     pBadge.textContent = pendingState.hasMore ? `${pCount}+` : String(pCount);
@@ -530,6 +681,12 @@ function updateCounts() {
     rBadge.classList.remove('hidden');
   } else {
     rBadge.classList.add('hidden');
+  }
+  if (pinnedState.started && pinCount > 0) {
+    pinBadge.textContent = `${pinCount}/${MAX_PINS}`;
+    pinBadge.classList.remove('hidden');
+  } else {
+    pinBadge.classList.add('hidden');
   }
 }
 
@@ -654,8 +811,14 @@ function init() {
       reportState.cursor = null;
       reportState.started = false;
       reportState.hasMore = false;
+      pinnedState.cursor = null;
+      pinnedState.started = false;
+      pinnedState.hasMore = false;
+      pinnedState.pinnedIds = new Set();
       $('list-pending').innerHTML = '';
       $('list-reports').innerHTML = '';
+      $('list-pinned').innerHTML = '';
+      $('list-pinned-current').innerHTML = '';
       showLoginView();
     }
   });

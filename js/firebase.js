@@ -214,6 +214,71 @@ export async function countByTarget(targetType, targetId) {
   } catch (e) { return 0; }
 }
 
+/* ---------- ピン留めされた投稿の取得（最大3件・新しい順） ----------
+   「今日のひとこと」セクションのフィード上部表示用。
+   pinned==true の投稿のみ取得。 */
+export async function fetchPinned() {
+  const c = await ensureAnon();
+  if (!c) return [];
+  const { collection, query, where, orderBy, limit, getDocs } = c.fs;
+  try {
+    const snap = await getDocs(query(
+      collection(c.db, 'posts'),
+      where('hidden', '==', false),
+      where('status', '==', 'published'),
+      where('pinned', '==', true),
+      orderBy('pinnedAt', 'desc'),
+      limit(3)
+    ));
+    const posts = [];
+    snap.forEach(d => { const o = d.data(); o.id = d.id; posts.push(o); });
+    return posts;
+  } catch (e) {
+    /* インデックス未作成や 0件 で失敗した場合は空配列を返す（UI を壊さない） */
+    return [];
+  }
+}
+
+/* ---------- ピン留め投稿のリアルタイム購読 ---------- */
+export async function subscribePinned(onChange, onError) {
+  const c = await ensureAnon();
+  if (!c) return function () {};
+  const { collection, query, where, orderBy, limit, onSnapshot } = c.fs;
+  const q = query(
+    collection(c.db, 'posts'),
+    where('hidden', '==', false),
+    where('status', '==', 'published'),
+    where('pinned', '==', true),
+    orderBy('pinnedAt', 'desc'),
+    limit(3)
+  );
+  return onSnapshot(q, function (snap) {
+    const posts = [];
+    snap.forEach(function (d) { const o = d.data(); o.id = d.id; posts.push(o); });
+    if (onChange) onChange(posts);
+  }, function (err) {
+    if (onError) onError(err);
+  });
+}
+
+/* ---------- リアクションの増減（+1 / -1） ----------
+   key: 'wakaru' | 'sameba' | 'ikitakatta' | 'hozon'
+   delta: +1 または -1
+   サーバ側で increment を使い、競合に強い加算を行う。
+   既存ドキュメントに reactions フィールドが無くても dot-path 更新で生成される。 */
+const REACTION_KEYS = ['wakaru', 'sameba', 'ikitakatta', 'hozon'];
+export async function reactToPost(postId, key, delta) {
+  if (REACTION_KEYS.indexOf(key) === -1) throw new Error('invalid-key');
+  if (delta !== 1 && delta !== -1) throw new Error('invalid-delta');
+  const c = await ensureAnon();
+  if (!c) throw new Error('not-configured');
+  if (!c.auth.currentUser) throw new Error('auth-failed');
+  const { doc, updateDoc, increment } = c.fs;
+  const patch = {};
+  patch['reactions.' + key] = increment(delta);
+  await updateDoc(doc(c.db, 'posts', postId), patch);
+}
+
 /* ---------- 通報 ---------- */
 export async function reportPost(postId, reason) {
   const c = await ensureAnon();
@@ -317,6 +382,72 @@ export async function unhidePost(postId) {
   if (!c) throw new Error('not-configured');
   const { doc, updateDoc } = c.fs;
   await updateDoc(doc(c.db, 'posts', postId), { hidden: false });
+}
+
+/* ---------- 公開済み投稿の取得（管理画面のピン留め管理タブ用） ----------
+   新着順。hidden は両方含める（運営は全件閲覧可）。 */
+export async function fetchPublishedForAdmin(cursor) {
+  const c = await core();
+  if (!c) return { posts: [], lastDoc: null, hasMore: false };
+  const { collection, query, where, orderBy, limit, startAfter, getDocs } = c.fs;
+  const parts = [
+    collection(c.db, 'posts'),
+    where('status', '==', 'published'),
+    orderBy('createdAt', 'desc')
+  ];
+  if (cursor) parts.push(startAfter(cursor));
+  parts.push(limit(FEED_PAGE));
+  const snap = await getDocs(query.apply(null, parts));
+  return packResult(snap);
+}
+
+/* ---------- 現在のピン留め投稿（管理画面用・運営権限で全件可視） ----------
+   公開ページ側の fetchPinned と同じクエリだが、運営権限で確実に読める。 */
+export async function fetchPinnedForAdmin() {
+  const c = await core();
+  if (!c) return [];
+  const { collection, query, where, orderBy, getDocs } = c.fs;
+  try {
+    const snap = await getDocs(query(
+      collection(c.db, 'posts'),
+      where('pinned', '==', true),
+      orderBy('pinnedAt', 'desc')
+    ));
+    const posts = [];
+    snap.forEach(d => { const o = d.data(); o.id = d.id; posts.push(o); });
+    return posts;
+  } catch (e) {
+    return [];
+  }
+}
+
+/* ---------- ピン留め / 解除（管理者専用） ----------
+   pin=true のときは pinnedAt をサーバ時刻で更新する。
+   ピン留めは同時最大3件まで。4件目をピン留めする場合は
+   一番古い（pinnedAt が最も古い）ものを自動で解除する。 */
+const MAX_PINS = 3;
+export async function setPostPinned(postId, pin) {
+  const c = await core();
+  if (!c) throw new Error('not-configured');
+  const { doc, updateDoc, serverTimestamp } = c.fs;
+  if (pin) {
+    /* 既存のピン留めを取得し、上限を超える場合は最古を外す */
+    const current = await fetchPinnedForAdmin();
+    const others = current.filter(p => p.id !== postId);
+    if (others.length >= MAX_PINS) {
+      /* 最古（配列末尾）を外す。複数オーバーフローしても1件ずつ外す（通常は1件のはず） */
+      const overflow = others.slice(MAX_PINS - 1);
+      for (const op of overflow) {
+        await updateDoc(doc(c.db, 'posts', op.id),
+          { pinned: false, pinnedAt: null });
+      }
+    }
+    await updateDoc(doc(c.db, 'posts', postId),
+      { pinned: true, pinnedAt: serverTimestamp() });
+  } else {
+    await updateDoc(doc(c.db, 'posts', postId),
+      { pinned: false, pinnedAt: null });
+  }
 }
 
 /* ---------- 全投稿のエクスポート（バックアップ用） ---------- */
