@@ -291,9 +291,6 @@
       <button id="tab-reports" class="tab active" data-tab="reports">
         通報<span id="cnt-reports" class="count hidden">0</span>
       </button>
-      <button id="tab-pending" class="tab" data-tab="pending">
-        承認待ち<span id="cnt-pending" class="count hidden">0</span>
-      </button>
       <button id="tab-pinned" class="tab" data-tab="pinned">
         ピン留め<span id="cnt-pinned" class="count hidden">0</span>
       </button>
@@ -306,7 +303,12 @@
       </div>
     </div>
 
-    <div id="panel-pending" class="hidden">
+    <!-- 旧「承認待ち」タブは事後モデレーション化に伴い削除済み（2026-05-25）。
+         pending ステータスの投稿は新規には作られないため、UIを残すと運営者が混乱する。 -->
+
+    <!-- 承認待ち DOM の互換用ダミー（admin.js から残存参照されるため、不可視で保持）。
+         将来 admin.js から pending 関連を完全削除したら削除可能。 -->
+    <div id="panel-pending" class="hidden" aria-hidden="true">
       <div id="list-pending"></div>
       <div id="more-pending" class="toolbar hidden">
         <button class="btn btn-ghost btn-block" data-more="pending">もっと見る</button>

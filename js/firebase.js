@@ -1,13 +1,13 @@
 /* ===================================================================
-   森道 After party — Firebase接続（画像投稿・事前承認制 対応版）
+   森道 After party — Firebase接続（事後モデレーション制）
 
    ・公開フィード型SNSをサーバコードなしで実現（クライアントSDKのみ）。
    ・公開ページ(index.html)：匿名認証。UIDはレート制限・通報用の内部IDで、
      ユーザーには表示しない。
    ・管理ページ(admin.html)：メール＋パスワードでログイン（運営者専用）。
-   ・画像つき投稿は status:'pending' で保存され、運営が承認するまで
-     公開フィードに表示されない（事前承認制）。
-   ・投稿の承認・非表示・削除はクライアントの一般ユーザーからは不可
+   ・すべての投稿は status:'published' で即時公開される（事後モデレーション）。
+     不適切な内容は通報経由で運営が hidden=true に切り替えて即時非表示にする。
+   ・投稿の非表示・削除はクライアントの一般ユーザーからは不可
      （Security Rules で運営のみに制限）。
    ・App Check（reCAPTCHA v3）：Botによる直接書き込みを遮断。必須。
 
@@ -52,7 +52,11 @@ function core() {
         provider: new acM.ReCaptchaV3Provider(RECAPTCHA_SITE_KEY),
         isTokenAutoRefreshEnabled: true
       });
-    } catch (e) { /* App Check 初期化失敗でもアプリは継続 */ }
+    } catch (e) {
+      /* App Check 初期化失敗でもアプリは継続するが、運用監視のため警告を残す。
+         本番で reCAPTCHA Site Key が誤っているなどの原因をログから検知する。 */
+      console.warn('App Check init failed:', e);
+    }
     return {
       app,
       auth: authM.getAuth(app),

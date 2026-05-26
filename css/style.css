@@ -23,7 +23,7 @@
   --card:      #ffffff;   /* カード面 */
   --ink:       #222222;   /* 本文文字：濃いグレー（公式と同じ #222） */
   --ink-soft:  #555555;   /* 副次テキスト */
-  --ink-faint: #9a9a9a;   /* 補助・プレースホルダ */
+  --ink-faint: #6f6f6f;   /* 補助・プレースホルダ（屋外日中でも読めるよう AA を満たす） */
   --line:      #222222;   /* 区切り線：1px 黒（公式の核） */
   --hairline:  #d6d2c8;   /* 薄罫：入力枠等 */
   --rule-soft: #e8e4dc;   /* さらに薄い罫 */
@@ -167,11 +167,12 @@ body.night ::selection{background:var(--ink);color:var(--bg);}
 
 /* ナイトモード切替：丸ピル＋細罫。公式のSNSアイコンのトーンに寄せる */
 .icon-btn{
-  min-width:44px;height:32px;padding:0 14px;
+  /* タッチターゲットは WCAG 2.5.5 推奨の 44px 以上を担保。 */
+  min-width:44px;min-height:44px;padding:0 14px;
   border:1px solid var(--line);border-radius:var(--radius-pill);
   background:transparent;color:var(--ink);
   display:inline-flex;align-items:center;justify-content:center;
-  font-family:var(--font-en);font-size:11px;font-weight:700;
+  font-family:var(--font-en);font-size:12px;font-weight:700;
   letter-spacing:.14em;text-transform:uppercase;
   transition:background .2s ease,color .2s ease;
 }
@@ -376,8 +377,10 @@ body.night .chip.active{background:var(--ink);color:var(--bg);border-color:var(-
   box-shadow:0 0 0 2px rgba(222,24,21,.14);
 }
 .textarea{
+  /* iOS Safari の自動ズーム防止のため、入力欄は 16px 以上を維持。
+     見た目の上品さは line-height と letter-spacing で担保する。 */
   min-height:170px;resize:vertical;line-height:1.92;
-  font-family:var(--font-serif);font-size:15.5px;letter-spacing:.04em;
+  font-family:var(--font-serif);font-size:16px;letter-spacing:.04em;
 }
 
 .counter{
@@ -1007,7 +1010,8 @@ body.night .qc-prompt__dot{background:var(--red-d);}
 /* ---- レスポンシブの微調整 ---- */
 @media (max-width:380px){
   .qc-card{padding:12px 12px;}
-  .qc-body{min-height:104px;font-size:14.5px;padding:10px 12px;}
+  /* 入力欄は iOS Safari の自動ズーム防止のため 16px を死守 */
+  .qc-body{min-height:104px;font-size:16px;padding:10px 12px;}
   .qc-meta__label{min-width:48px;font-size:10px;}
   .qc-chips .chip{font-size:11.5px;padding:4px 9px;}
 }

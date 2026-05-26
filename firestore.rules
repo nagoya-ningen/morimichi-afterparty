@@ -50,6 +50,10 @@ service cloud.firestore {
              ['shop', 'area', 'artist', 'festival', 'staff']
         && request.resource.data.targetName is string
         && request.resource.data.targetName.size() <= 200
+        /* targetId は文字列または null（pick:true 対象では文字列、free モード/festival/staff では null） */
+        && (request.resource.data.targetId == null
+            || (request.resource.data.targetId is string
+                && request.resource.data.targetId.size() <= 64))
         && (request.resource.data.snsUrl == null
             || (request.resource.data.snsUrl is string
                 && request.resource.data.snsUrl.size() <= 300
@@ -66,12 +70,16 @@ service cloud.firestore {
           /* テキストのみ */
           request.resource.data.imageUrl == null
           ||
-          /* 画像つき：Cloudinary ドメインのみ許可 */
+          /* 画像つき：Cloudinary のうち自テナント（dsmrdy4kl）のドメインのみ許可。
+             imagePublicId は文字列または null。 */
           (
             request.resource.data.imageUrl is string
             && request.resource.data.imageUrl.size() <= 600
-            && request.resource.data.imageUrl.matches('^https://res\\.cloudinary\\.com/.*')
+            && request.resource.data.imageUrl.matches('^https://res\\.cloudinary\\.com/dsmrdy4kl/.*')
             && request.resource.data.imageConsent == true
+            && (request.resource.data.imagePublicId == null
+                || (request.resource.data.imagePublicId is string
+                    && request.resource.data.imagePublicId.size() <= 200))
           )
         );
 
@@ -146,7 +154,9 @@ service cloud.firestore {
                 && request.resource.data.reason.size() <= 500))
         && request.resource.data.createdAt == request.time;
       allow read: if isAdmin();
-      allow update, delete: if false;
+      /* 通報レコードの修正は禁止。削除のみ運営に許可（誤通報・スパムの整理用）。 */
+      allow update: if false;
+      allow delete: if isAdmin();
     }
 
     /* 上記以外のパスはすべて拒否 */

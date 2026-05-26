@@ -109,7 +109,15 @@ import {
   let toastT;
   function toast(m) {
     let t = $('#toast');
-    if (!t) { t = el('div', 'toast'); t.id = 'toast'; document.body.appendChild(t); }
+    if (!t) {
+      t = el('div', 'toast');
+      t.id = 'toast';
+      /* スクリーンリーダーが状態変化を読み上げられるよう aria-live を付与。 */
+      t.setAttribute('role', 'status');
+      t.setAttribute('aria-live', 'polite');
+      t.setAttribute('aria-atomic', 'true');
+      document.body.appendChild(t);
+    }
     t.textContent = m; t.classList.add('show');
     clearTimeout(toastT);
     toastT = setTimeout(() => t.classList.remove('show'), 2400);
@@ -135,6 +143,16 @@ import {
     };
   }
   function chars(s) { return [...String(s == null ? '' : s)].length; }
+  /* Cloudinary の画像URLに自動最適化変換を挟む。
+     `/upload/` の直後に `f_auto,q_auto,w_{width}` を入れて、フォーマット・品質・幅を最適化する。
+     Cloudinary 以外のURLや既に変換済みのURLはそのまま返す。 */
+  function optimizeImageUrl(url, width) {
+    if (!url || typeof url !== 'string') return url;
+    if (url.indexOf('res.cloudinary.com') === -1) return url;
+    if (url.indexOf('/upload/f_') !== -1 || url.indexOf('/upload/q_') !== -1) return url;
+    const w = width || 800;
+    return url.replace('/upload/', '/upload/f_auto,q_auto,w_' + w + '/');
+  }
   function dayLabel(id) {
     const d = FESTIVAL.days.find(x => x.id === id);
     return d ? d.label + ' ' + d.dow : id;
@@ -620,12 +638,15 @@ import {
     html += '<div class="post-body">' + esc(p.body) + '</div>';
     card.innerHTML = html;
 
-    /* 画像（あれば本文の下にサムネイル。クリックでライトボックス） */
+    /* 画像（あれば本文の下にサムネイル。クリックでライトボックス）
+       サムネは Cloudinary の f_auto,q_auto,w_800 変換で軽量化。
+       ライトボックスは大きめの w_1600 を使い、原寸より軽い。 */
     if (p.imageUrl) {
       const thumb = el('button', 'post-image-wrap');
-      thumb.innerHTML = '<img class="post-image" src="' + esc(p.imageUrl) +
+      thumb.innerHTML = '<img class="post-image" src="' +
+        esc(optimizeImageUrl(p.imageUrl, 800)) +
         '" alt="投稿された写真" loading="lazy">';
-      thumb.onclick = () => openLightbox(p.imageUrl);
+      thumb.onclick = () => openLightbox(optimizeImageUrl(p.imageUrl, 1600));
       card.appendChild(thumb);
     }
 
@@ -687,7 +708,7 @@ import {
     const ta = el('textarea', 'textarea qc-body');
     ta.id = 'qcBody';
     ta.maxLength = BODY_MAX;
-    ta.placeholder = '感想を自由に書いてください（30文字以上ですと読み応えが出ます）';
+    ta.placeholder = '感想を自由に書いてください（5文字から。長文歓迎）';
     ta.value = q.body;
     ta.oninput = () => { q.body = ta.value; updateQcCounter(); };
     card.appendChild(ta);
@@ -1179,7 +1200,7 @@ import {
     /* 本文 */
     const bodyField = fieldWrap('感想', true,
       '<textarea class="textarea" id="fBody" maxlength="' + BODY_MAX +
-      '" placeholder="30文字以上で、自由に書いてください">' + esc(fm.body) + '</textarea>',
+      '" placeholder="5文字から書けます。長文も歓迎です。">' + esc(fm.body) + '</textarea>',
       '');
     const counter = el('div', 'counter');
     bodyField.querySelector('.field__body').appendChild(counter);
@@ -1235,7 +1256,8 @@ import {
         consent.appendChild(el('span', 'image-consent__txt',
           'この写真は自分で撮影したものです。公式画像・他人の作品・他人の' +
           'SNS投稿の転載ではありません。人物が写っている場合は、本人の同意を' +
-          '得ています（または個人を特定できません）。'));
+          '得ています（または個人を特定できません）。' +
+          'お子さま（13歳未満）が特定できる写真ではありません。'));
         imgField.appendChild(consent);
       }
 
@@ -1265,7 +1287,7 @@ import {
       const upd = () => {
         fm.body = bodyI.value;
         const n = chars(bodyI.value.trim());
-        counter.textContent = n + ' 文字（30文字以上）';
+        counter.textContent = n + ' 文字（5文字から）';
         counter.className = 'counter ' + (n >= BODY_MIN ? 'ok' : (n > 0 ? 'short' : ''));
       };
       bodyI.oninput = upd;
@@ -1681,7 +1703,16 @@ import {
     root.appendChild(el('div', 'card',
       '<b>森道 After party</b>' +
       '<p class="field__hint">森、道、市場2026の感想・思い出を残し、参加者どうしで' +
-      '共有するための非公式ファンアプリです。主催・運営とは一切関係ありません。</p>'));
+      '共有するための非公式ファンアプリです。主催・運営とは一切関係ありません。</p>' +
+      '<p class="field__hint" style="margin-top:8px">' +
+      '・運営：<a href="https://x.com/nagoya_ningen" target="_blank" rel="noopener">' +
+      'ナゴヤ人間（@nagoya_ningen）</a>。1人で運用しているため、通報・削除依頼への' +
+      '対応は48〜72時間以内を目安としています。<br>' +
+      '・このアプリは個人が AI（Claude Code）の支援を受けて制作した非公式ファンアプリ' +
+      'です。投稿の正確性・継続性は保証されません。<br>' +
+      '・フェス終了後も当面はフィードを残しますが、2027年3月末ごろを目安に' +
+      '読み取り専用化を予定しています。' +
+      '</p>'));
 
     root.appendChild(secTitle('プライバシーについて', 'PRIVACY'));
     root.appendChild(el('div', 'card',
@@ -1699,6 +1730,7 @@ import {
       '・写真は自分で撮影したものだけを投稿してください。公式ビジュアル、' +
       '出演者のステージ写真、他人の作品・SNS投稿の転載はできません。<br>' +
       '・他人が写っている写真は、本人の同意を得てから投稿してください。<br>' +
+      '・<b>お子さま（13歳未満）が特定できる写真は投稿しないでください。</b><br>' +
       '・写真つき投稿も即時公開されます。不適切な内容は、運営が通報経由で' +
       '即時非表示にします。<br>' +
       '・アップロード時に、写真の位置情報（EXIF）は自動で削除されます。' +
@@ -1757,8 +1789,15 @@ import {
     wrap.innerHTML = '<div class="modal__handle"></div>' +
       '<div class="modal__title">この投稿を通報する</div>' +
       '<p class="field__hint">不適切だと感じた理由を選んでください。' +
-      '運営が確認します。</p>';
-    const reasons = ['誹謗中傷・攻撃的', '個人情報が含まれる', 'スパム・無関係', 'その他'];
+      '運営が確認します。通報した方の情報は他のユーザーには表示されません。</p>';
+    /* 権利侵害（出店者・権利者からの削除依頼系）も選択肢として用意。 */
+    const reasons = [
+      '誹謗中傷・攻撃的',
+      '個人情報が含まれる',
+      '権利侵害（写真・営業情報など）',
+      'スパム・無関係',
+      'その他'
+    ];
     reasons.forEach(r => {
       const b = el('button', 'btn btn--block', r);
       b.style.marginTop = '8px';
