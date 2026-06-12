@@ -2,149 +2,51 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>森道 After party — 感想を残す</title>
-<meta name="description" content="森、道、市場2026の感想・思い出を残して共有する、非公式のファンアプリ。">
-<meta name="theme-color" content="#ffffff">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="森道After">
-<link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="img/icon-192.png">
-<link rel="icon" type="image/png" href="img/icon-192.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="css/style.css">
-<!-- 森道公式の組版に寄せたWebフォント構成：
-     - 本文：IBM Plex Sans JP（公式と同系統。本文のリズム）
-     - 見出し英字／キャプション：Montserrat（公式の英字組と同じ）
-     - 装飾英字：Roboto（公式の数字・日付組と同じ）
-     - 明朝（一部見出し・引用）：Noto Serif JP（公式の Yu Mincho 代替） -->
-<link rel="stylesheet" media="print" onload="this.media='all'"
-  href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;700&family=Montserrat:wght@400;500;700;800&family=Roboto:wght@400;500;700;900&family=Noto+Serif+JP:wght@500;700&display=swap">
-<noscript><link rel="stylesheet"
-  href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;700&family=Montserrat:wght@400;500;700;800&family=Roboto:wght@400;500;700;900&family=Noto+Serif+JP:wght@500;700&display=swap"></noscript>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>移転しました — 森道 After party は「わたしの森道」に統合されました</title>
+<meta name="robots" content="noindex">
+<meta http-equiv="refresh" content="3;url=https://nagoya-ningen.github.io/watashi-no-morimichi/party.html">
+<link rel="canonical" href="https://nagoya-ningen.github.io/watashi-no-morimichi/party.html">
+<style>
+  body{
+    font-family:"IBM Plex Sans JP","Hiragino Kaku Gothic ProN",sans-serif;
+    background:#fff;color:#222;line-height:1.9;letter-spacing:.04em;
+    max-width:560px;margin:0 auto;padding:64px 24px;
+  }
+  h1{font-size:18px;border-bottom:1px solid #222;padding-bottom:12px;margin-bottom:18px;}
+  a{color:#de1815;font-weight:700;}
+  p{font-size:14px;}
+</style>
 </head>
 <body>
-
-<header class="app-header">
-  <div class="app-header__top">
-    <div class="app-header__title">
-      <!-- インラインSVGロゴ：
-           - 「森道」を太いゴシック相当の太字組み（公式の手書きカンマ模倣は禁止のため、
-             カンマは使わず半角スペースで分かち書きしない／全角の組み合わせで表現）
-           - 「AFTER PARTY」を英字細キャプション（letter-spacing広め）
-           - 中段に水平線（海・地平線）＋夕日の点（コーラル）
-           - 縦の細罫を1本入れて「,」を使わずに森道と日本語側の編集誌的な区切りを示す
-           - 色は全てCSS変数（currentColor or 直接 var(--coral)）に紐付け、ナイトモード対応
-           - サイズ：viewBox 240x44。実表示は CSS で高さ32-40px に絞る
-      -->
-      <svg class="brand-logo" viewBox="0 0 240 44" role="img" aria-labelledby="brandLogoTitle" focusable="false">
-        <title id="brandLogoTitle">森道 After party</title>
-        <defs>
-          <!-- 水平線のヘアライン：Coral → Amber → Dusk。
-               SVG属性で var() を直接書くと一部ブラウザで効かないので、
-               実色値を直接指定する（夕日色は light/dark 共通で固定） -->
-          <linearGradient id="brandHairline" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%"  stop-color="#d6593a" />
-            <stop offset="55%" stop-color="#cc8a3c" />
-            <stop offset="100%" stop-color="#344056" />
-          </linearGradient>
-        </defs>
-        <!-- 「森道」日本語：currentColorで本文色（黒〜砂色）に追従。
-             公式は手書きSVGロゴだが、こちらは Noto Serif JP の明朝太字を使う
-             ことで意匠の差別化を図る（公式の手書きカンマ・カスタム筆書きは模倣しない） -->
-        <text x="0" y="30"
-              font-family="'Noto Serif JP', 'Yu Mincho', serif"
-              font-weight="700"
-              font-size="26"
-              letter-spacing="2"
-              fill="currentColor">森道</text>
-        <!-- 縦の細罫：森道公式のカンマを真似ない代わりの編集記号 -->
-        <line x1="74" y1="10" x2="74" y2="34"
-              stroke="currentColor" stroke-width="1" opacity="0.35" />
-        <!-- 英字キャプション「AFTER PARTY」：Montserrat 細字＋字間広め。
-             公式の英字組（Montserrat letter-spacing 0.1em〜0.2em）に揃える -->
-        <text x="83" y="20"
-              font-family="'Montserrat', sans-serif"
-              font-weight="700"
-              font-size="11"
-              letter-spacing="2.6"
-              fill="currentColor">AFTER PARTY</text>
-        <!-- 水平線のヘアライン（海／日没後の地平線）。装飾は1本に絞る -->
-        <line x1="84" y1="30" x2="222" y2="30"
-              stroke="url(#brandHairline)" stroke-width="1.2" />
-        <!-- 夕日の点（コーラル固定。light/darkに依らず夕日は赤味で一貫） -->
-        <circle cx="225" cy="30" r="2.6" fill="#d6593a" />
-        <!-- サブキャプション：日付を Roboto で添える（公式のニュース日付と同様） -->
-        <text x="83" y="40"
-              font-family="'Roboto', sans-serif"
-              font-weight="500"
-              font-size="8"
-              letter-spacing="1.4"
-              fill="currentColor"
-              opacity="0.55">2026 / GAMAGORI</text>
-      </svg>
-    </div>
-    <div class="app-header__right">
-      <button class="icon-btn" id="nightBtn" aria-label="表示モード切替" aria-pressed="false">
-        <span class="icon-btn__txt" data-night-label></span>
-      </button>
-    </div>
-  </div>
-</header>
-
-<main>
-  <section class="view pad" id="view-feed"></section>
-  <section class="view pad" id="view-post"></section>
-  <section class="view pad" id="view-search"></section>
-  <section class="view pad" id="view-about"></section>
-</main>
-
-<div class="modal-bg" id="modalBg">
-  <div class="modal" id="modalBody" role="dialog" aria-modal="true" aria-label="詳細"></div>
-</div>
-
-<nav class="tabbar" aria-label="メインナビゲーション">
-  <button data-view="feed"><span class="ico" aria-hidden="true"></span><span class="lbl">フィード</span></button>
-  <button data-view="post"><span class="ico" aria-hidden="true"></span><span class="lbl">書く</span></button>
-  <button data-view="search"><span class="ico" aria-hidden="true"></span><span class="lbl">さがす</span></button>
-  <button data-view="about"><span class="ico" aria-hidden="true"></span><span class="lbl">情報</span></button>
-</nav>
-
-<!-- データ・辞書（グローバル定義） -->
-<script src="js/data.js"></script>
-<script src="js/ngwords.js"></script>
-<!-- 画像の圧縮・EXIF（GPS位置情報）除去ライブラリ -->
-<script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js"></script>
-<!-- Firebase接続とアプリ本体（ESM。data.js等のグローバルを参照） -->
-<script type="module" src="js/firebase.js"></script>
-<script type="module" src="js/app.js"></script>
-
+<h1>森道 After party は移転しました</h1>
+<p>「わたしの森道」アプリに統合され、アプリ内の「ひろば」になりました。
+投稿・リアクションなどのデータはすべてそのまま引き継がれています。</p>
+<p>3秒後に自動で移動します。移動しない場合は
+<a href="https://nagoya-ningen.github.io/watashi-no-morimichi/party.html">こちら</a>。</p>
 <script>
-/* Service Worker 登録。
-   - 初回訪問: controllerchange でのリロードはしない。
-   - 2回目以降: 新SWが有効化されたら一度だけリロードして修正を反映。
-   - アプリ復帰時に update() で最新版を取得。 */
-if ('serviceWorker' in navigator) {
-  var hadController = !!navigator.serviceWorker.controller;
-  var refreshing = false;
-  navigator.serviceWorker.addEventListener('controllerchange', function () {
-    if (!hadController || refreshing) return;
-    refreshing = true;
-    window.location.reload();
-  });
-  window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (reg) {
-      document.addEventListener('visibilitychange', function () {
-        if (!document.hidden) {
-          try { var p = reg.update(); if (p && p.catch) p.catch(function () {}); }
-          catch (e) {}
-        }
-      });
-    }).catch(function () {});
-  });
-}
+/* 旧PWAのService Worker・キャッシュを掃除してから新URLへ。
+   （旧SWが残っていると古い画面が表示され続けるため） */
+(function () {
+  var dest = 'https://nagoya-ningen.github.io/watashi-no-morimichi/party.html';
+  var go = function () { window.location.replace(dest); };
+  var t = setTimeout(go, 2500);
+  try {
+    var jobs = [];
+    if ('serviceWorker' in navigator) {
+      jobs.push(navigator.serviceWorker.getRegistrations()
+        .then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); }));
+    }
+    if (window.caches && caches.keys) {
+      jobs.push(caches.keys().then(function (ks) {
+        return Promise.all(ks.filter(function (k) { return k.indexOf('mma-') === 0; })
+          .map(function (k) { return caches.delete(k); }));
+      }));
+    }
+    Promise.all(jobs).then(function () { clearTimeout(t); go(); })
+      .catch(function () {});
+  } catch (e) {}
+})();
 </script>
 </body>
 </html>
